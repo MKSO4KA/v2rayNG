@@ -6,7 +6,7 @@
 # Ignore output JSON file
 */app/release/output.json
 
-# Ignore IDE and build system directories
+## Ignore IDE and build system directories
 .idea/
 .gradle/
 *.iml
@@ -15,6 +15,13 @@ obj/*
 *.o.d
 *.reg
 project_full_source.txt
+
+# Personal scripts and tools
+apply.sh
+build_core_and_deploy.sh
+helper.sh
+run_gomobile_safe.go
+add_msys2_to_context_menu.reg
 
 # Ignore local configuration files globally
 local.properties

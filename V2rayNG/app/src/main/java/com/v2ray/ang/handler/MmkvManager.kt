@@ -12,6 +12,7 @@ import com.v2ray.ang.dto.ServerAffiliationInfo
 import com.v2ray.ang.dto.SubscriptionCache
 import com.v2ray.ang.dto.SubscriptionItem
 import com.v2ray.ang.dto.WebDavConfig
+import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.Utils
 
@@ -213,23 +214,31 @@ object MmkvManager {
 
     /**
      * Removes the server configurations via subscription ID.
+     * It will preserve elements of type POLICYGROUP to keep manually created persistent groups.
      *
      * @param subscriptionId The subscription ID.
      */
     fun removeServerViaSubid(subscriptionId: String?) {
         val subId = getSubscriptionId(subscriptionId)
         val serverList = decodeServerList(subId)
+        val toRemove = mutableListOf<String>()
 
-        // Remove all servers in the list
+        // Remove all servers in the list EXCEPT policy groups
         serverList.forEach { guid ->
-            if (getSelectServer() == guid) {
-                mainStorage.remove(KEY_SELECTED_SERVER)
+            val config = decodeServerConfig(guid)
+            if (config != null && config.configType == EConfigType.POLICYGROUP) {
+                // Keep policy groups
+            } else {
+                if (getSelectServer() == guid) {
+                    mainStorage.remove(KEY_SELECTED_SERVER)
+                }
+                profileFullStorage.remove(guid)
+                serverAffStorage.remove(guid)
+                toRemove.add(guid)
             }
-            profileFullStorage.remove(guid)
-            serverAffStorage.remove(guid)
         }
 
-        serverList.clear()
+        serverList.removeAll(toRemove)
         encodeServerList(serverList, subId)
     }
 
@@ -400,8 +409,9 @@ object MmkvManager {
      *
      * @param guid The subscription GUID.
      * @param subItem The subscription item.
+     * @return The subscription GUID.
      */
-    fun encodeSubscription(guid: String, subItem: SubscriptionItem) {
+    fun encodeSubscription(guid: String, subItem: SubscriptionItem): String {
         val key = guid.ifBlank { Utils.getUuid() }
         subStorage.encode(key, JsonUtil.toJson(subItem))
 
@@ -410,6 +420,7 @@ object MmkvManager {
             subsList.add(key)
             encodeSubsList(subsList)
         }
+        return key
     }
 
     /**
@@ -719,3 +730,4 @@ object MmkvManager {
 
     //endregion
 }
+

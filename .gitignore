@@ -1,38 +1,43 @@
 # Ignore data and key store files
 *.dat
 *.jks
+*.keystore
 
 # Ignore output JSON file
-V2rayNG/app/release/output.json
+*/app/release/output.json
 
 # Ignore IDE and build system directories
 .idea/
 .gradle/
 *.iml
+obj/
+*.a
+*.o.d
+*.reg
+project_full_source.txt
 
-# Ignore local properties and DS_Store files
+# Ignore local configuration files globally
+local.properties
 /local.properties
-.DS_Store
+V2rayNG/local.properties
+signing.properties
 
 # Ignore build directories and captures
-/build
-/captures
-V2rayNG/app/build
-V2rayNG/build
-V2rayNG/local.properties
+/build/
+/captures/
+*/app/build/
+*/build/
 
 # Ignore APK and AAR files
 *.apk
 *.aar
 
-# Ignore signing properties
-signing.properties
-
 # Ignore shared object files
 *.so
 
 # Ignore Google services JSON
-V2rayNG/app/google-services.json
+google-services.json
+*/app/google-services.json
 
 # Additional common Android/Java ignores
 *.log
@@ -64,3 +69,5 @@ V2rayNG/app/google-services.json
 # Ignore OS-specific files
 Thumbs.db
 .DS_Store
+*.DS_Store
+

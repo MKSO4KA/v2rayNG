@@ -1,0 +1,191 @@
+# === V2rayNG Core Builder Makefile ===
+# Optimized for MSYS2 UCRT64 Environment with Precise Path Detection
+
+# --- PROPERTY LOADER ---
+# Load dynamic environment configurations safely from V2rayNG/local.properties
+LOCAL_PROPS := $(CURDIR)/V2rayNG/local.properties
+get_prop = $(shell grep -E "^$(1)=" $(LOCAL_PROPS) 2>/dev/null | cut -d'=' -f2- | tr -d '\r')
+
+# --- ENVIRONMENT CONFIGURATION ---
+RAW_ANDROID_HOME := $(or $(call get_prop,msys.android.home),/d/Android/Sdk)
+RAW_NDK_HOME     := $(or $(call get_prop,msys.ndk.home),$(RAW_ANDROID_HOME)/ndk/28.2.13676358)
+RAW_JAVA_BIN     := $(or $(call get_prop,msys.java.bin),/d/Android Studio/jbr/bin)
+
+# Fallback GOPATH if 'go env' fails; cut handles multiple paths separated by ';'
+RAW_GOPATH := $(shell go env GOPATH 2>/dev/null | cut -d';' -f1)
+ifeq ($(RAW_GOPATH),)
+    RAW_GOPATH := $(HOME)/go
+endif
+
+# Convert to MSYS format for internal Makefile use
+export ANDROID_HOME  := $(shell cygpath -u "$(RAW_ANDROID_HOME)")
+export NDK_HOME      := $(shell cygpath -u "$(RAW_NDK_HOME)")
+export JAVA_HOME_BIN := $(shell cygpath -u "$(RAW_JAVA_BIN)")
+export GOPATH_MSYS   := $(shell cygpath -u "$(RAW_GOPATH)")
+
+# --- RF CONNECTIVITY & AUTO TOOLCHAIN ---
+export GOTOOLCHAIN := auto
+export GOPROXY     := https://goproxy.cn,https://goproxy.io,direct
+export GOSUMDB     := sum.golang.google.cn
+
+# --- PATH INJECTION ---
+# Ensure GOPATH/bin is in the MSYS PATH so native commands find installed binaries
+export PATH := $(GOPATH_MSYS)/bin:/c/Program Files/Go/bin:/c/Go/bin:$(JAVA_HOME_BIN):$(PATH)
+
+# --- NDK SETUP ---
+ifneq (,$(wildcard $(NDK_HOME)/ndk-build.cmd))
+    NDK_EXEC := $(NDK_HOME)/ndk-build.cmd
+else
+    NDK_EXEC := $(NDK_HOME)/ndk-build
+endif
+
+# --- PATHS ---
+PROJECT_ROOT := $(CURDIR)
+APP_LIBS_DIR := $(PROJECT_ROOT)/V2rayNG/app/libs
+CORE_SRC_DIR := $(PROJECT_ROOT)/AndroidLibXrayLite
+TUNNEL_DIR   := $(PROJECT_ROOT)/hev-socks5-tunnel
+
+# --- DYNAMIC CODE GENERATION ---
+define GO_SAFE_WRAPPER
+package main
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+)
+func main() {
+	exePath := os.Args[1]
+	if _, err := os.Stat(exePath); os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "[GO-WRAPPER] FATAL ERROR: Binary not found at %s\n", exePath)
+		os.Exit(1)
+	}
+	cmd := exec.Command(exePath, os.Args[2:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// Extract WIN_GOBIN to inject into child PATH
+	winGobin := os.Getenv("WIN_GOBIN")
+	var newEnv []string
+	for _, env := range os.Environ() {
+		// Filter out invalid Windows internal variables
+		if !strings.HasPrefix(env, "=") {
+			// Forcefully prepend the correct Go binary path to PATH
+			if strings.HasPrefix(strings.ToUpper(env), "PATH=") && winGobin != "" {
+				env = "PATH=" + winGobin + string(os.PathListSeparator) + env[5:]
+			}
+			newEnv = append(newEnv, env)
+		}
+	}
+	cmd.Env = newEnv
+
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "[GO-WRAPPER] EXECUTION ERROR: %v\n", err)
+		os.Exit(1)
+	}
+}
+endef
+export GO_SAFE_WRAPPER
+
+define GO_TOOLS_FILE
+//go:build tools
+package buildtools
+import _ "github.com/sagernet/gomobile/bind"
+endef
+export GO_TOOLS_FILE
+
+.PHONY: all help check tunnel assets core deploy clean
+
+all: check tunnel core deploy
+
+help:
+	@echo "=== V2rayNG MSYS2 Build System ==="
+	@echo "Targets:"
+	@echo "  make all      - Build Tunnel, Go Core, and Deploy to Android project"
+	@echo "  make check    - Verify environment paths and toolchain configuration"
+	@echo "  make tunnel   - Compile hev-socks5-tunnel (C++) using NDK"
+	@echo "  make assets   - Download and prepare GeoIP/GeoSite assets"
+	@echo "  make core     - Compile Go Core (Xray Lite) into AAR"
+	@echo "  make deploy   - Copy build artifacts to app/libs"
+	@echo "  make clean    - Remove build artifacts"
+
+check:
+	@echo "=== Environment Check ==="
+	@echo "LOCAL_PROPS:    $(LOCAL_PROPS)"
+	@if [ -f "$(LOCAL_PROPS)" ]; then echo "  [OK] Found local.properties"; else echo "  [!!] Missing local.properties"; fi
+	@echo "ANDROID_HOME:   $(ANDROID_HOME)"
+	@if [ -d "$(ANDROID_HOME)" ]; then echo "  [OK] Directory exists"; else echo "  [!!] Directory NOT found"; fi
+	@echo "NDK_HOME:       $(NDK_HOME)"
+	@if [ -d "$(NDK_HOME)" ]; then echo "  [OK] Directory exists"; else echo "  [!!] Directory NOT found"; fi
+	@echo "JAVA_HOME_BIN:  $(JAVA_HOME_BIN)"
+	@if [ -d "$(JAVA_HOME_BIN)" ]; then echo "  [OK] Directory exists"; else echo "  [!!] Directory NOT found"; fi
+	@echo "--- Toolchain Check ---"
+	@command -v go >/dev/null 2>&1 && echo "Go:             [OK] `go version`" || echo "Go:             [!!] NOT FOUND in PATH"
+	@command -v javac >/dev/null 2>&1 && echo "Java Compiler:  [OK] `javac -version 2>&1`" || echo "Java Compiler:  [!!] NOT FOUND in PATH"
+	@command -v jq >/dev/null 2>&1 && echo "jq:             [OK] `jq --version`" || echo "jq:             [!!] NOT FOUND in PATH"
+	@command -v curl >/dev/null 2>&1 && echo "curl:           [OK] `curl --version | head -n 1`" || echo "curl:           [!!] NOT FOUND in PATH"
+	@echo "--- Paths ---"
+	@echo "Go GOPATH:      `go env GOPATH`"
+	@echo "Go GOBIN:       `go env GOBIN`"
+
+assets:
+	@echo "[1/4] Preparing Go Core assets..."
+	@echo "$$GO_SAFE_WRAPPER" > $(PROJECT_ROOT)/run_gomobile_safe.go
+	@mkdir -p $(CORE_SRC_DIR)/data $(CORE_SRC_DIR)/assets
+	@(cd $(CORE_SRC_DIR) && if [ ! -f "data/geoip.dat" ]; then bash gen_assets.sh download; fi)
+	@cp -vf $(CORE_SRC_DIR)/data/*.dat $(CORE_SRC_DIR)/assets/ 2>/dev/null || true
+
+tunnel:
+	@echo "[2/4] Building Tunnel (C++)..."
+	@mkdir -p $(PROJECT_ROOT)/libs $(PROJECT_ROOT)/obj
+	$(NDK_EXEC) \
+		NDK_PROJECT_PATH=$(TUNNEL_DIR) \
+		APP_BUILD_SCRIPT=$(TUNNEL_DIR)/Android.mk \
+		APP_ABI="armeabi-v7a arm64-v8a x86 x86_64" \
+		APP_PLATFORM=android-24 \
+		NDK_LIBS_OUT=$(PROJECT_ROOT)/libs \
+		NDK_OUT=$(PROJECT_ROOT)/obj \
+		APP_CFLAGS="-O3 -DPKGNAME=com/v2ray/ang/service" \
+		APP_LDFLAGS="-Wl,--build-id=none -Wl,--hash-style=gnu"
+
+core: assets
+	@echo "[3/4] Compiling Go Core (Xray Lite) -> AAR..."
+	@( \
+		cd $(CORE_SRC_DIR); \
+		go install github.com/sagernet/gomobile/cmd/gomobile@latest; \
+		go install github.com/sagernet/gomobile/cmd/gobind@latest; \
+		ACTUAL_GOBIN=$$(go env GOBIN); \
+		if [ -z "$$ACTUAL_GOBIN" ]; then ACTUAL_GOBIN=$$(go env GOPATH | cut -d';' -f1)/bin; fi; \
+		GOMOBILE_EXE_WIN=$$(cygpath -w "$$ACTUAL_GOBIN/gomobile.exe"); \
+		export WIN_GOBIN=$$(cygpath -w "$$ACTUAL_GOBIN"); \
+		go mod edit -dropreplace=golang.org/x/mobile 2>/dev/null || true; \
+		go mod edit -dropreplace=github.com/sagernet/gomobile 2>/dev/null || true; \
+		mkdir -p buildtools; \
+		echo "$$GO_TOOLS_FILE" > buildtools/tools.go; \
+		go get github.com/sagernet/gomobile/bind@latest; \
+		go mod tidy; \
+		go run ../run_gomobile_safe.go "$$GOMOBILE_EXE_WIN" init; \
+		go run ../run_gomobile_safe.go "$$GOMOBILE_EXE_WIN" bind -v -androidapi 24 -trimpath -ldflags='-s -w -buildid=' -o "libv2ray.aar" ./; \
+		rm -rf buildtools; \
+	)
+
+deploy:
+	@echo "[4/4] Deploying artifacts to V2rayNG project..."
+	@mkdir -p $(APP_LIBS_DIR)
+	@if [ -f "$(CORE_SRC_DIR)/libv2ray.aar" ]; then \
+		cp -v "$(CORE_SRC_DIR)/libv2ray.aar" "$(APP_LIBS_DIR)/"; \
+	else \
+		echo "ERROR: libv2ray.aar not found! Run 'make core' first."; exit 1; \
+	fi
+	@if [ -d "$(PROJECT_ROOT)/libs" ]; then \
+		cp -rvf $(PROJECT_ROOT)/libs/* $(APP_LIBS_DIR)/ 2>/dev/null || true; \
+	else \
+		echo "ERROR: Tunnel libs not found! Run 'make tunnel' first."; exit 1; \
+	fi
+	@echo "DONE! Artifacts deployed to $(APP_LIBS_DIR)"
+
+clean:
+	@rm -rf $(PROJECT_ROOT)/libs $(PROJECT_ROOT)/obj $(PROJECT_ROOT)/run_gomobile_safe.go
+	@rm -f $(CORE_SRC_DIR)/libv2ray.aar
+	@rm -rf $(APP_LIBS_DIR)/*
+

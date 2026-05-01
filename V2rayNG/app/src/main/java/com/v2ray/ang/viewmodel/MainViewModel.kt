@@ -18,6 +18,7 @@ import com.v2ray.ang.dto.ServersCache
 import com.v2ray.ang.dto.SubscriptionCache
 import com.v2ray.ang.dto.SubscriptionUpdateResult
 import com.v2ray.ang.dto.TestServiceMessage
+import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.extension.matchesPattern
 import com.v2ray.ang.extension.serializable
 import com.v2ray.ang.extension.toastError
@@ -491,3 +492,4 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 }
+

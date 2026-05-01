@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.text.TextUtils
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.ArrayAdapter
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import com.v2ray.ang.AppConfig
@@ -27,10 +28,10 @@ class SubEditActivity : BaseActivity() {
     private var save_config: MenuItem? = null
 
     private val editSubId by lazy { intent.getStringExtra("subId").orEmpty() }
+    private val qsTargets = mutableListOf<Pair<String, String>>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        //setContentView(binding.root)
         setContentViewWithToolbar(binding.root, showHomeAsUp = true, title = getString(R.string.title_sub_setting))
 
         SettingsChangeManager.makeSetupGroupTab()
@@ -39,6 +40,31 @@ class SubEditActivity : BaseActivity() {
             bindingServer(subItem)
         } else {
             clearServer()
+        }
+        
+        setupQsTileSpinner()
+    }
+
+    private fun setupQsTileSpinner() {
+        val serverList = MmkvManager.decodeServerList(editSubId)
+        qsTargets.clear()
+        qsTargets.add(Pair("", "Last Selected (Default)"))
+        
+        serverList.forEach { guid ->
+            MmkvManager.decodeServerConfig(guid)?.let { config ->
+                qsTargets.add(Pair(guid, config.remarks))
+            }
+        }
+        
+        val displayList = qsTargets.map { it.second }
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, displayList)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.spQsTileTarget.adapter = adapter
+        
+        val currentTarget = SettingsManager.getQsTileTargetGuid()
+        val pos = qsTargets.indexOfFirst { it.first == currentTarget }
+        if (pos >= 0) {
+            binding.spQsTileTarget.setSelection(pos)
         }
     }
 
@@ -128,8 +154,15 @@ class SubEditActivity : BaseActivity() {
             }
         }
 
-        MmkvManager.encodeSubscription(editSubId, subItem)
-        SubscriptionUpdater.syncOne(subId = editSubId)
+        val savedSubId = MmkvManager.encodeSubscription(editSubId, subItem)
+        SubscriptionUpdater.syncOne(subId = savedSubId)
+        
+        // Save QS Tile Target
+        val selectedPos = binding.spQsTileTarget.selectedItemPosition
+        if (selectedPos >= 0 && selectedPos < qsTargets.size) {
+            SettingsManager.setQsTileTargetGuid(qsTargets[selectedPos].first)
+        }
+
         toastSuccess(R.string.toast_success)
         finish()
         return true
@@ -187,5 +220,5 @@ class SubEditActivity : BaseActivity() {
 
         else -> super.onOptionsItemSelected(item)
     }
-
 }
+

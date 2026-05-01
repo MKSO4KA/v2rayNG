@@ -54,6 +54,15 @@ object V2RayServiceManager {
      * @return True if the service was started successfully, false otherwise.
      */
     fun startVServiceFromToggle(context: Context): Boolean {
+        // Attempt to activate Quick Tile Target Outbound if configured
+        val targetGuid = SettingsManager.getQsTileTargetGuid()
+        if (!targetGuid.isNullOrEmpty()) {
+            val targetConfig = MmkvManager.decodeServerConfig(targetGuid)
+            if (targetConfig != null) {
+                MmkvManager.setSelectServer(targetGuid)
+            }
+        }
+
         if (MmkvManager.getSelectServer().isNullOrEmpty()) {
             context.toast(R.string.app_tile_first_use)
             return false
@@ -468,3 +477,4 @@ object V2RayServiceManager {
         }
     }
 }
+

@@ -558,6 +558,7 @@ object AngConfigManager {
             if (count > 0) {
                 it.subscription.lastUpdated = System.currentTimeMillis()
                 MmkvManager.encodeSubscription(it.guid, it.subscription)
+                ensureDefaultPolicyGroup(it.guid)
                 LogUtil.i(AppConfig.TAG, "Subscription updated: ${it.subscription.remarks}, $count configs")
                 return SubscriptionUpdateResult(
                     configCount = count,
@@ -609,7 +610,8 @@ object AngConfigManager {
         val subItem = SubscriptionItem()
         subItem.remarks = uri.fragment ?: "import sub"
         subItem.url = url
-        MmkvManager.encodeSubscription("", subItem)
+        val guid = MmkvManager.encodeSubscription("", subItem)
+        ensureDefaultPolicyGroup(guid)
         return 1
     }
 
@@ -633,4 +635,52 @@ object AngConfigManager {
 
         return "$addrPart : ${port ?: ""}"
     }
+
+    /**
+     * Ensures default multi-tier Policy Groups exist for the given subscription.
+     * Creates groups using regex classifications.
+     *
+     * @param subId The subscription ID.
+     */
+    private fun ensureDefaultPolicyGroup(subId: String) {
+        if (subId.isBlank()) return
+        val serverList = MmkvManager.decodeServerList(subId)
+        
+        val existingPolicyGroups = serverList.mapNotNull { guid ->
+            MmkvManager.decodeServerConfig(guid)
+        }.filter { it.configType == EConfigType.POLICYGROUP }
+        
+        val subItem = MmkvManager.decodeSubscription(subId)
+        val subName = subItem?.remarks?.takeIf { it.isNotBlank() } ?: "Sub"
+
+        val wlPattern = """(\bбел[а-я\.]*|white\s?list|список|списки|локальн[а-я]*|local)"""
+        val brPattern = """(заруб|overseas|foreign|bridge)"""
+
+        val filterOverseas = """^((?!.*(?i)$wlPattern).*|(?=.*(?i)$wlPattern)(?=.*(?i)$brPattern).*)$"""
+        val filterRuRb = """^(?=.*(?i)$wlPattern)(?!.*(?i)$brPattern).*$"""
+        val filterBridge = """^(?=.*(?i)$wlPattern)(?=.*(?i)$brPattern).*$"""
+
+        if (existingPolicyGroups.none { it.policyGroupFilter == filterOverseas }) {
+            createPolicyGroup(subId, "$subName - Overseas Auto", filterOverseas)
+        }
+        if (existingPolicyGroups.none { it.policyGroupFilter == filterRuRb }) {
+            createPolicyGroup(subId, "$subName - RU/RB Auto", filterRuRb)
+        }
+        if (existingPolicyGroups.none { it.policyGroupFilter == filterBridge }) {
+            createPolicyGroup(subId, "$subName - Bridge Auto", filterBridge)
+        }
+    }
+
+    private fun createPolicyGroup(subId: String, remarks: String, filter: String) {
+        val config = ProfileItem.create(EConfigType.POLICYGROUP)
+        config.remarks = remarks
+        config.policyGroupType = "0" // Least Ping
+        config.policyGroupSubscriptionId = subId
+        config.policyGroupFilter = filter
+        config.policyGroupTolerance = 1.0
+        config.subscriptionId = subId
+        config.description = "$remarks Filter"
+        MmkvManager.encodeServerConfig("", config)
+    }
 }
+

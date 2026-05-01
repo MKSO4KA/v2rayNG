@@ -607,4 +607,18 @@ object SettingsManager {
         }
     }
 
+    /**
+     * Gets the custom Quick Settings Tile target GUID from preferences.
+     */
+    fun getQsTileTargetGuid(): String? {
+        return MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_TARGET_GUID)
+    }
+
+    /**
+     * Sets the custom Quick Settings Tile target GUID.
+     */
+    fun setQsTileTargetGuid(guid: String) {
+        MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_TARGET_GUID, guid)
+    }
 }
+

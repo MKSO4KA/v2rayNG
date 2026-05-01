@@ -258,9 +258,9 @@ object V2rayConfigManager {
         v2rayConfig.outbounds.removeAt(0)
         val outboundsList = mutableListOf<OutboundBean>()
         var index = 0
-        for (config in validConfigs) {
+        for (configItem in validConfigs) {
             index++
-            val outbound = convertProfile2Outbound(config) ?: continue
+            val outbound = convertProfile2Outbound(configItem) ?: continue
             val ret = updateOutboundWithGlobalSettings(outbound)
             if (!ret) continue
             outbound.tag = "proxy-$index"
@@ -1024,7 +1024,10 @@ object V2rayConfigManager {
                         tag = AppConfig.TAG_BALANCER,
                         selector = lstSelector,
                         strategy = V2rayConfig.RoutingBean.StrategyObject(
-                            type = "leastPing"
+                            type = "leastPing",
+                            settings = if (config.policyGroupTolerance != null) {
+                                V2rayConfig.RoutingBean.StrategySettingsObject(tolerance = config.policyGroupTolerance)
+                            } else null
                         )
                     )
                     v2rayConfig.routing.balancers = listOf(balancer)
@@ -1537,3 +1540,4 @@ object V2rayConfigManager {
 
     //endregion
 }
+

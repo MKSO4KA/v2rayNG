@@ -237,6 +237,25 @@
                     android:inputType="text" />
 
             </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/padding_spacing_dp16"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Quick Tile Action (Default Outbound)" />
+
+                <Spinner
+                    android:id="@+id/sp_qs_tile_target"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/padding_spacing_dp8"
+                    android:layout_marginBottom="@dimen/padding_spacing_dp8" />
+            </LinearLayout>
         </LinearLayout>
 
         <LinearLayout
@@ -248,3 +267,4 @@
 
     </LinearLayout>
 </ScrollView>
+

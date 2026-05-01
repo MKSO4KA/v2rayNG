@@ -10,7 +10,7 @@
 .idea/
 .gradle/
 *.iml
-obj/
+obj/*
 *.a
 *.o.d
 *.reg

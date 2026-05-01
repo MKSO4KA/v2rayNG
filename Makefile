@@ -113,7 +113,7 @@ all: check tunnel core deploy
 help:
 	@echo "=== V2rayNG MSYS2 Build System ==="
 	@echo "Targets:"
-	@echo "  make all      - Build Tunnel, Go Core, and Deploy to Android project"
+	@echo "  make all      - Build Tunnel, Go Core, and Deploy to Android project "
 	@echo "  make check    - Verify environment paths and toolchain configuration"
 	@echo "  make tunnel   - Compile hev-socks5-tunnel (C++) using NDK"
 	@echo "  make assets   - Download and prepare GeoIP/GeoSite assets"

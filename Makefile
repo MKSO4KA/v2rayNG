@@ -45,6 +45,18 @@ APP_LIBS_DIR := $(PROJECT_ROOT)/V2rayNG/app/libs
 CORE_SRC_DIR := $(PROJECT_ROOT)/AndroidLibXrayLite
 TUNNEL_DIR   := $(PROJECT_ROOT)/hev-socks5-tunnel
 
+# --- TUNNEL BUILD COMMAND ---
+# Abstracted to allow try/catch symlink hotfix fallback
+TUNNEL_BUILD_CMD := $(NDK_EXEC) \
+	NDK_PROJECT_PATH=$(TUNNEL_DIR) \
+	APP_BUILD_SCRIPT=$(TUNNEL_DIR)/Android.mk \
+	APP_ABI="armeabi-v7a arm64-v8a x86 x86_64" \
+	APP_PLATFORM=android-24 \
+	NDK_LIBS_OUT=$(PROJECT_ROOT)/libs \
+	NDK_OUT=$(PROJECT_ROOT)/obj \
+	APP_CFLAGS="-O3 -DPKGNAME=com/v2ray/ang/service" \
+	APP_LDFLAGS="-Wl,--build-id=none -Wl,--hash-style=gnu"
+
 # --- DYNAMIC CODE GENERATION ---
 define GO_SAFE_WRAPPER
 package main
@@ -138,15 +150,35 @@ assets:
 tunnel:
 	@echo "[2/4] Building Tunnel (C++)..."
 	@mkdir -p $(PROJECT_ROOT)/libs $(PROJECT_ROOT)/obj
-	$(NDK_EXEC) \
-		NDK_PROJECT_PATH=$(TUNNEL_DIR) \
-		APP_BUILD_SCRIPT=$(TUNNEL_DIR)/Android.mk \
-		APP_ABI="armeabi-v7a arm64-v8a x86 x86_64" \
-		APP_PLATFORM=android-24 \
-		NDK_LIBS_OUT=$(PROJECT_ROOT)/libs \
-		NDK_OUT=$(PROJECT_ROOT)/obj \
-		APP_CFLAGS="-O3 -DPKGNAME=com/v2ray/ang/service" \
-		APP_LDFLAGS="-Wl,--build-id=none -Wl,--hash-style=gnu"
+	@if $(TUNNEL_BUILD_CMD); then \
+		echo "  -> [OK] Tunnel built successfully on first try."; \
+	else \
+		echo "  -> [WARN] Build failed! Attempting Windows symlink hotfix..."; \
+		find "$(TUNNEL_DIR)" -type f -size -256c -not -name "*.symbak" -not -path "*/.git/*" | while read -r file; do \
+			content=$$(cat "$$file" 2>/dev/null); \
+			if [ -n "$$content" ]; then \
+				target_path="$$(dirname "$$file")/$$content"; \
+				if [ -f "$$target_path" ] && [ "$$file" != "$$target_path" ]; then \
+					cp "$$file" "$$file.symbak"; \
+					cp -f "$$target_path" "$$file"; \
+				fi; \
+			fi; \
+		done; \
+		echo "  -> Retrying build with hotfix applied..."; \
+		$(TUNNEL_BUILD_CMD); \
+		BUILD_EXIT=$$?; \
+		echo "  -> Restoring original symlink files..."; \
+		find "$(TUNNEL_DIR)" -type f -name "*.symbak" | while read -r bak_file; do \
+			orig_file="$${bak_file%.symbak}"; \
+			mv -f "$$bak_file" "$$orig_file"; \
+		done; \
+		if [ $$BUILD_EXIT -ne 0 ]; then \
+			echo "  -> [FATAL] Tunnel build failed even with hotfix."; \
+			exit $$BUILD_EXIT; \
+		else \
+			echo "  -> [OK] Tunnel built successfully with hotfix."; \
+		fi; \
+	fi
 
 core: assets
 	@echo "[3/4] Compiling Go Core (Xray Lite) -> AAR..."

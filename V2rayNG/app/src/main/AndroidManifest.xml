@@ -79,6 +79,12 @@
             android:exported="false"
             android:windowSoftInputMode="stateUnchanged" />
         <activity
+            android:name=".ui.AutoGroupListActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.AutoGroupEditActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.ServerGroupActivity"
             android:exported="false"
             android:windowSoftInputMode="stateUnchanged" />

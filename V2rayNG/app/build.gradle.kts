@@ -1,7 +1,22 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     id("com.jaredsburrows.license")
+}
+
+// Load properties from local.properties explicitly
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        load(FileInputStream(localPropertiesFile))
+    }
+}
+
+fun getExtraProperty(name: String): String? {
+    return (project.findProperty(name) as? String) ?: localProperties.getProperty(name)
 }
 
 android {
@@ -40,12 +55,12 @@ android {
 
     signingConfigs {
         create("release") {
-            val storeFilePath = project.findProperty("RELEASE_STORE_FILE") as? String
+            val storeFilePath = getExtraProperty("RELEASE_STORE_FILE")
             if (storeFilePath != null) {
                 storeFile = rootProject.file(storeFilePath)
-                storePassword = project.findProperty("RELEASE_STORE_PASSWORD") as? String
-                keyAlias = project.findProperty("RELEASE_KEY_ALIAS") as? String
-                keyPassword = project.findProperty("RELEASE_KEY_PASSWORD") as? String
+                storePassword = getExtraProperty("RELEASE_STORE_PASSWORD")
+                keyAlias = getExtraProperty("RELEASE_KEY_ALIAS")
+                keyPassword = getExtraProperty("RELEASE_KEY_PASSWORD")
             }
         }
     }
@@ -53,8 +68,9 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            if (signingConfigs.getByName("release").storeFile != null) {
-                signingConfig = signingConfigs.getByName("release")
+            val releaseSigning = signingConfigs.getByName("release")
+            if (releaseSigning.storeFile != null) {
+                signingConfig = releaseSigning
             }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

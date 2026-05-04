@@ -1,5 +1,6 @@
 package com.v2ray.ang.ui
 
+import android.content.Intent
 import android.os.Bundle
 import android.text.TextUtils
 import android.view.Menu
@@ -43,6 +44,12 @@ class SubEditActivity : BaseActivity() {
         }
         
         setupQsTileSpinner()
+
+        binding.btnManageAutoGroups.setOnClickListener {
+            val intent = Intent(this, AutoGroupListActivity::class.java)
+            intent.putExtra("subId", editSubId)
+            startActivity(intent)
+        }
     }
 
     private fun setupQsTileSpinner() {
@@ -68,9 +75,6 @@ class SubEditActivity : BaseActivity() {
         }
     }
 
-    /**
-     * binding selected server config
-     */
     private fun bindingServer(subItem: SubscriptionItem): Boolean {
         binding.etRemarks.text = Utils.getEditable(subItem.remarks)
         binding.etUrl.text = Utils.getEditable(subItem.url)
@@ -82,12 +86,10 @@ class SubEditActivity : BaseActivity() {
         binding.allowInsecureUrl.isChecked = subItem.allowInsecureUrl
         binding.etPreProfile.text = Utils.getEditable(subItem.prevProfile)
         binding.etNextProfile.text = Utils.getEditable(subItem.nextProfile)
+        binding.etAutoGroupGistUrl.text = Utils.getEditable(subItem.autoGroupGistUrl)
         return true
     }
 
-    /**
-     * clear or init server config
-     */
     private fun clearServer(): Boolean {
         binding.etRemarks.text = null
         binding.etUrl.text = null
@@ -96,12 +98,10 @@ class SubEditActivity : BaseActivity() {
         binding.etUpdateInterval.text = null
         binding.etPreProfile.text = null
         binding.etNextProfile.text = null
+        binding.etAutoGroupGistUrl.text = null
         return true
     }
 
-    /**
-     * save server config
-     */
     private fun saveServer(): Boolean {
         val subItem = MmkvManager.decodeSubscription(editSubId) ?: SubscriptionItem()
 
@@ -115,9 +115,7 @@ class SubEditActivity : BaseActivity() {
         val intervalInput = binding.etUpdateInterval.text.toString().trim()
         val intervalMinutes = intervalInput.toLongOrNull()
         if (subItem.autoUpdate) {
-            // autoUpdate is enabled: interval must be valid
             if (intervalMinutes == null) {
-                // field is empty, reset to default
                 subItem.updateInterval = SubscriptionItem().updateInterval
             } else if (intervalMinutes < AppConfig.SUBSCRIPTION_MIN_INTERVAL_MINUTES) {
                 toast(R.string.toast_invalid_update_interval)
@@ -126,7 +124,6 @@ class SubEditActivity : BaseActivity() {
                 subItem.updateInterval = intervalMinutes
             }
         } else {
-            // autoUpdate is disabled: save only if the value is valid, otherwise keep the existing value
             if (intervalMinutes != null && intervalMinutes >= AppConfig.SUBSCRIPTION_MIN_INTERVAL_MINUTES) {
                 subItem.updateInterval = intervalMinutes
             }
@@ -135,6 +132,7 @@ class SubEditActivity : BaseActivity() {
         subItem.prevProfile = binding.etPreProfile.text.toString()
         subItem.nextProfile = binding.etNextProfile.text.toString()
         subItem.allowInsecureUrl = binding.allowInsecureUrl.isChecked
+        subItem.autoGroupGistUrl = binding.etAutoGroupGistUrl.text.toString().trim()
 
         if (TextUtils.isEmpty(subItem.remarks)) {
             toast(R.string.sub_setting_remarks)
@@ -157,7 +155,6 @@ class SubEditActivity : BaseActivity() {
         val savedSubId = MmkvManager.encodeSubscription(editSubId, subItem)
         SubscriptionUpdater.syncOne(subId = savedSubId)
         
-        // Save QS Tile Target
         val selectedPos = binding.spQsTileTarget.selectedItemPosition
         if (selectedPos >= 0 && selectedPos < qsTargets.size) {
             SettingsManager.setQsTileTargetGuid(qsTargets[selectedPos].first)
@@ -168,9 +165,6 @@ class SubEditActivity : BaseActivity() {
         return true
     }
 
-    /**
-     * save server config
-     */
     private fun deleteServer(): Boolean {
         if (editSubId.isNotEmpty()) {
             if (MmkvManager.decodeSettingsBool(AppConfig.PREF_CONFIRM_REMOVE)) {
@@ -184,7 +178,6 @@ class SubEditActivity : BaseActivity() {
                         }
                     }
                     .setNegativeButton(android.R.string.cancel) { _, _ ->
-                        // do nothing
                     }
                     .show()
             } else {

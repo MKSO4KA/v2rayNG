@@ -12,6 +12,9 @@ data class SubscriptionItem(
     var nextProfile: String? = null,
     var filter: String? = null,
     var allowInsecureUrl: Boolean = false,
-    var userAgent: String? = null
+    var userAgent: String? = null,
+    var autoGroupRules: MutableList<AutoGroupRule> = mutableListOf(),
+    var autoGroupGistUrl: String? = null,
+    var lastGistRulesJson: String? = null
 )
 

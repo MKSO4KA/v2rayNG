@@ -295,6 +295,15 @@
     <string name="title_del_invalid_config">Delete invalid config</string>
     <string name="title_export_all">Export configs to clipboard</string>
     <string name="title_sub_setting">Subscription group setting</string>
+
+    <string name="title_auto_group_list">Auto-Groups Constructor</string>
+    <string name="title_auto_group_edit">Edit Auto-Group</string>
+    <string name="btn_manage_auto_groups">Manage Auto-Groups</string>
+    <string name="auto_group_remarks">Group Name (Remarks)</string>
+    <string name="auto_group_regex">Regex Filter</string>
+    <string name="sub_setting_auto_group_gist_url">Auto-Groups Gist URL (Secret JSON)</string>
+    <string name="toast_gist_rule_readonly">Rules imported from Gist are read-only.</string>
+
     <string name="sub_setting_remarks">remarks</string>
     <string name="sub_setting_url">Optional URL</string>
     <string name="sub_setting_user_agent">User Agent</string>
@@ -457,3 +466,4 @@
     </string-array>
 
 </resources>
+

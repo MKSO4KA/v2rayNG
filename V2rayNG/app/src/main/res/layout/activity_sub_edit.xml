@@ -60,7 +60,6 @@
                     android:layout_height="wrap_content"
                     android:text="@string/sub_setting_url" />
 
-
                 <EditText
                     android:id="@+id/et_url"
                     android:layout_width="match_parent"
@@ -255,6 +254,38 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/padding_spacing_dp8"
                     android:layout_marginBottom="@dimen/padding_spacing_dp8" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/padding_spacing_dp16"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/sub_setting_auto_group_gist_url" />
+
+                <EditText
+                    android:id="@+id/et_auto_group_gist_url"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="https://gist.githubusercontent.com/..."
+                    android:inputType="textUri" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/padding_spacing_dp16"
+                android:orientation="vertical">
+
+                <Button
+                    android:id="@+id/btn_manage_auto_groups"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/btn_manage_auto_groups" />
             </LinearLayout>
         </LinearLayout>
 

@@ -12,7 +12,8 @@ object GistRuleProvider {
         val remarks: String?,
         val regex: String?,
         val strategy: String?,
-        val tolerance: Double?
+        val tolerance: Double?,
+        val interval: String?
     )
 
     data class GistBlockRuleDto(
@@ -52,6 +53,7 @@ object GistRuleProvider {
                     regex = dto.regex,
                     type = mapStrategyToType(dto.strategy),
                     tolerance = dto.tolerance ?: 50.0,
+                    interval = dto.interval ?: "3m",
                     isFromGist = true
                 )
             }

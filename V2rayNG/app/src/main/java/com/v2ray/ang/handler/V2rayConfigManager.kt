@@ -133,7 +133,9 @@ object V2rayConfigManager {
                     true
                 } else {
                     try {
-                        Regex(filter).containsMatchIn(profile.remarks)
+                        val expanded = AutoOutboundBuilder.expandFlagShorthands(filter)
+                        val searchStr = "[${profile.configType.name}] ${profile.remarks}"
+                        Regex(expanded, RegexOption.IGNORE_CASE).containsMatchIn(searchStr) || searchStr.contains(expanded)
                     } catch (e: Exception) {
                         profile.remarks.contains(filter)
                     }
@@ -823,7 +825,7 @@ object V2rayConfigManager {
                         subjectSelector = lstSelector,
                         pingConfig = V2rayConfig.BurstObservatoryObject.PingConfigObject(
                             destination = MmkvManager.decodeSettingsString(AppConfig.PREF_DELAY_TEST_URL) ?: AppConfig.DELAY_TEST_URL,
-                            interval = "5m",
+                            interval = config.policyGroupInterval ?: "5m",
                             sampling = 2,
                             timeout = "30s"
                         )
@@ -867,7 +869,7 @@ object V2rayConfigManager {
                     v2rayConfig.observatory = V2rayConfig.ObservatoryObject(
                         subjectSelector = lstSelector,
                         probeUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_DELAY_TEST_URL) ?: AppConfig.DELAY_TEST_URL,
-                        probeInterval = "3m",
+                        probeInterval = config.policyGroupInterval ?: "3m",
                         enableConcurrency = true
                     )
                 }

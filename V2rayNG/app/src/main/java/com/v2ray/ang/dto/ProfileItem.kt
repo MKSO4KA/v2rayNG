@@ -70,6 +70,7 @@ data class ProfileItem(
     var policyGroupSubscriptionId: String? = null,
     var policyGroupFilter: String? = null,
     var policyGroupTolerance: Double? = null,
+    var policyGroupInterval: String? = null
 
     ) {
     companion object {
@@ -134,6 +135,7 @@ data class ProfileItem(
                 && this.policyGroupSubscriptionId == obj.policyGroupSubscriptionId
                 && this.policyGroupFilter == obj.policyGroupFilter
                 && this.policyGroupTolerance == obj.policyGroupTolerance
+                && this.policyGroupInterval == obj.policyGroupInterval
                 )
     }
 }

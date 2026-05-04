@@ -1,32 +1,75 @@
-# v2rayNG
+# v2rayNG (Constructor & Gist-Sync Fork)
 
-A V2Ray client for Android, support [Xray core](https://github.com/XTLS/Xray-core) and [v2fly core](https://github.com/v2fly/v2ray-core)
+An enhanced version of v2rayNG supporting dynamic outbound grouping, remote configuration management, and centralized blocklists. This fork targets users who need advanced control over their subscription outbounds using regex and automated tools.
 
 [![API](https://img.shields.io/badge/API-24%2B-yellow.svg?style=flat)](https://developer.android.com/about/versions/lollipop)
 [![Kotlin Version](https://img.shields.io/badge/Kotlin-2.3.0-blue.svg)](https://kotlinlang.org)
-[![GitHub commit activity](https://img.shields.io/github/commit-activity/m/2dust/v2rayNG)](https://github.com/2dust/v2rayNG/commits/master)
-[![CodeFactor](https://www.codefactor.io/repository/github/2dust/v2rayng/badge)](https://www.codefactor.io/repository/github/2dust/v2rayng)
-[![GitHub Releases](https://img.shields.io/github/downloads/2dust/v2rayNG/latest/total?logo=github)](https://github.com/2dust/v2rayNG/releases)
-[![Chat on Telegram](https://img.shields.io/badge/Chat%20on-Telegram-brightgreen.svg)](https://t.me/v2rayn)
 
-### Telegram Channel
-[github_2dust](https://t.me/github_2dust)
+## 🚀 Fork Features
 
-### Usage
+### 🛠 Auto-Outbound Builder (Constructor)
+No more hardcoded groups. Define "Rules" that scan your subscription's proxy list and automatically create `POLICYGROUP` outbounds. If a rule's regex matches at least one proxy, a group is created. If no proxies match, the group is automatically cleaned up.
 
-#### Geoip and Geosite
-- geoip.dat and geosite.dat files are in `Android/data/com.v2ray.ang/files/assets` (path may differ on some Android device)
-- download feature will get enhanced version in this [repo](https://github.com/Loyalsoldier/v2ray-rules-dat) (Note it need a working proxy)
-- latest official [domain list](https://github.com/Loyalsoldier/v2ray-rules-dat) and [ip list](https://github.com/Loyalsoldier/geoip) can be imported manually
-- possible to use third party dat file in the same folder, like [h2y](https://guide.v2fly.org/routing/sitedata.html#%E5%A4%96%E7%BD%AE%E7%9A%84%E5%9F%9F%E5%90%8D%E6%96%87%E4%BB%B6)
+### ☁️ Remote Gist Synchronization
+Host your grouping rules and domain blocklists on GitHub Gist. The app will sync them every time you update your subscription. 
+- **Offline Resilience**: Rules are cached locally. If the Gist is blocked or the network is down, the last known configuration is used.
+- **Dynamic Updates**: Use the Raw URL format `https://gist.githubusercontent.com/USER/GIST_ID/raw/filename.json` (without the commit hash) to ensure the app always pulls the latest version.
 
-### More in our [wiki](https://github.com/2dust/v2rayNG/wiki)
+### 🏁 Smart Flags & Metadata Matching
+Regex in this fork doesn't just match the proxy name. It matches against a metadata string: `[PROTOCOL] Remarks`.
+- `{flag}`: Matches any country flag emoji (composed of two Regional Indicator symbols).
+- `{flag:RU}`: Matches the specific flag of a country by its ISO code (e.g., 🇷🇺, 🇺🇸, 🇪🇪).
+- **Example**: `^\[VLESS\].*{flag:EE}.*$` will catch only VLESS proxies from Estonia.
 
-### Development guide
+---
 
-Android project under V2rayNG folder can be compiled directly in Android Studio, or using Gradle wrapper. But the v2ray core inside the aar is (probably) outdated.  
-The aar can be compiled from the Golang project [AndroidLibV2rayLite](https://github.com/2dust/AndroidLibV2rayLite) or [AndroidLibXrayLite](https://github.com/2dust/AndroidLibXrayLite).
-For a quick start, read guide for [Go Mobile](https://github.com/golang/go/wiki/Mobile) and [Makefiles for Go Developers](https://tutorialedge.net/golang/makefiles-for-go-developers/)
+## 📄 JSON Specifications
 
-v2rayNG can run on Android Emulators. For WSA, VPN permission need to be granted via
-`appops set [package name] ACTIVATE_VPN allow`
+### 1. Auto-Group Rules (`rules.json`)
+Provide this URL in the **Subscription Setting > Auto-Groups Gist URL**.
+
+```json
+[
+  {
+    "remarks": "Overseas Auto",
+    "regex": "^((?!.*(?i)whitelist).*)$",
+    "strategy": "Least Ping",
+    "tolerance": 50.0
+  }
+]
+```
+- **strategy**: `Least Ping`, `Least Load`, `Random`, `Round Robin`.
+- **tolerance**: Milliseconds (e.g., 50.0). Only switches servers if the ping difference exceeds this value.
+
+### 2. Blocklist (`blocklist.json`)
+Provide this URL in the **Subscription Setting > Blocklist Gist URL**.
+
+```json
+[
+  {
+    "pattern": "domain:rezvorck.github.io",
+    "comment": "Analytics block"
+  },
+  {
+    "pattern": "geosite:category-ads-all",
+    "comment": "Adblock"
+  }
+]
+```
+- **pattern**: Supports core standards: `domain:`, `full:`, `geosite:`, or raw IP/CIDR.
+
+---
+
+## 🛠 Development & Build
+
+### Local Properties
+This project uses an explicit property loader. To sign your APKs, add the following to `V2rayNG/local.properties`:
+```properties
+RELEASE_STORE_FILE=../your_key.jks
+RELEASE_STORE_PASSWORD=your_password
+RELEASE_KEY_ALIAS=your_alias
+RELEASE_KEY_PASSWORD=your_password
+```
+
+### Building Core
+The project includes an optimized `Makefile` for MSYS2/UCRT64 environments. Run `make all` to compile the Go Core (`AndroidLibXrayLite`) and the C++ Tunnel (`hev-socks5-tunnel`) and deploy them directly to the Android project folder.

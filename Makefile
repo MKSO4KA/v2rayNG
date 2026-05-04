@@ -142,10 +142,12 @@ check:
 
 assets:
 	@echo "[1/4] Preparing Go Core assets..."
-	@echo "$$GO_SAFE_WRAPPER" > $(PROJECT_ROOT)/run_gomobile_safe.go
-	@mkdir -p $(CORE_SRC_DIR)/data $(CORE_SRC_DIR)/assets
-	@(cd $(CORE_SRC_DIR) && if [ ! -f "data/geoip.dat" ]; then bash gen_assets.sh download; fi)
-	@cp -vf $(CORE_SRC_DIR)/data/*.dat $(CORE_SRC_DIR)/assets/ 2>/dev/null || true
+	@echo "$$GO_SAFE_WRAPPER" > "$(PROJECT_ROOT)/run_gomobile_safe.go"
+	@mkdir -p "$(CORE_SRC_DIR)/data" "$(CORE_SRC_DIR)/assets"
+	@if [ -d "$(CORE_SRC_DIR)" ]; then \
+		(cd "$(CORE_SRC_DIR)" && if [ ! -f "data/geoip.dat" ]; then bash gen_assets.sh download; fi); \
+	fi
+	@cp -vf "$(CORE_SRC_DIR)/data/"*.dat "$(CORE_SRC_DIR)/assets/" 2>/dev/null || true
 
 tunnel:
 	@echo "[2/4] Building Tunnel (C++)..."
@@ -201,23 +203,29 @@ core: assets
 		rm -rf buildtools; \
 	)
 
+
+
 deploy:
 	@echo "[4/4] Deploying artifacts to V2rayNG project..."
-	@mkdir -p $(APP_LIBS_DIR)
+	@if [ -z "$(APP_LIBS_DIR)" ]; then echo "ERROR: APP_LIBS_DIR is empty!"; exit 1; fi
+	@mkdir -p "$(APP_LIBS_DIR)"
 	@if [ -f "$(CORE_SRC_DIR)/libv2ray.aar" ]; then \
 		cp -v "$(CORE_SRC_DIR)/libv2ray.aar" "$(APP_LIBS_DIR)/"; \
-	else \
-		echo "ERROR: libv2ray.aar not found! Run 'make core' first."; exit 1; \
 	fi
 	@if [ -d "$(PROJECT_ROOT)/libs" ]; then \
-		cp -rvf $(PROJECT_ROOT)/libs/* $(APP_LIBS_DIR)/ 2>/dev/null || true; \
-	else \
-		echo "ERROR: Tunnel libs not found! Run 'make tunnel' first."; exit 1; \
+		cp -rvf "$(PROJECT_ROOT)/libs/." "$(APP_LIBS_DIR)/" 2>/dev/null || true; \
 	fi
 	@echo "DONE! Artifacts deployed to $(APP_LIBS_DIR)"
 
 clean:
-	@rm -rf $(PROJECT_ROOT)/libs $(PROJECT_ROOT)/obj $(PROJECT_ROOT)/run_gomobile_safe.go
-	@rm -f $(CORE_SRC_DIR)/libv2ray.aar
-	@rm -rf $(APP_LIBS_DIR)/*
-
+	@echo "Cleaning build artifacts..."
+	@if [ -n "$(PROJECT_ROOT)" ] && [ "$(PROJECT_ROOT)" != "/" ]; then \
+		rm -rf "$(PROJECT_ROOT)/libs" "$(PROJECT_ROOT)/obj" "$(PROJECT_ROOT)/run_gomobile_safe.go"; \
+	fi
+	@if [ -n "$(CORE_SRC_DIR)" ] && [ "$(CORE_SRC_DIR)" != "/" ]; then \
+		rm -f "$(CORE_SRC_DIR)/libv2ray.aar"; \
+	fi
+	@if [ -n "$(APP_LIBS_DIR)" ] && [ "$(APP_LIBS_DIR)" != "/" ]; then \
+		rm -rf "$(APP_LIBS_DIR)"/*; \
+	fi
+	@echo "Clean completed."

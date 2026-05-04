@@ -15,6 +15,11 @@ object GistRuleProvider {
         val tolerance: Double?
     )
 
+    data class GistBlockRuleDto(
+        val pattern: String?,
+        val comment: String?
+    )
+
     fun fetchAndParseRules(url: String): Pair<List<AutoGroupRule>?, String?> {
         if (url.isBlank()) return null to null
         try {
@@ -52,6 +57,35 @@ object GistRuleProvider {
             }
         } catch (e: Exception) {
             LogUtil.e("GistRuleProvider", "Failed to parse json", e)
+            return null
+        }
+    }
+
+    fun syncBlocklist(subId: String) {
+        val subItem = MmkvManager.decodeSubscription(subId) ?: return
+        val url = subItem.blocklistGistUrl
+        if (url.isNullOrBlank()) return
+        try {
+            val cacheBusterUrl = if (url.contains("?")) "$url&nocache=${System.currentTimeMillis()}" else "$url?nocache=${System.currentTimeMillis()}"
+            val json = HttpUtil.getUrlContent(cacheBusterUrl, 15000)
+            if (!json.isNullOrBlank()) {
+                val dtos = JsonUtil.fromJson(json, Array<GistBlockRuleDto>::class.java)
+                if (dtos != null) {
+                    subItem.lastBlocklistJson = json
+                    MmkvManager.encodeSubscription(subId, subItem)
+                }
+            }
+        } catch (e: Exception) {
+            LogUtil.e("GistRuleProvider", "Failed to fetch or parse gist blocklist", e)
+        }
+    }
+
+    fun parseBlocklistFromJson(json: String): List<String>? {
+        try {
+            val dtos = JsonUtil.fromJson(json, Array<GistBlockRuleDto>::class.java) ?: return null
+            return dtos.mapNotNull { it.pattern?.trim()?.takeIf { p -> p.isNotEmpty() } }
+        } catch (e: Exception) {
+            LogUtil.e("GistRuleProvider", "Failed to parse blocklist json", e)
             return null
         }
     }

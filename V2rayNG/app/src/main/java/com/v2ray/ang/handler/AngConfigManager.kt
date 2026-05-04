@@ -36,9 +36,7 @@ object AngConfigManager {
             if (TextUtils.isEmpty(conf)) {
                 return -1
             }
-
             Utils.setClipboard(context, conf)
-
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to share config to clipboard", e)
             return -1
@@ -74,7 +72,6 @@ object AngConfigManager {
                 return null
             }
             return QRCodeDecoder.createQRCode(conf)
-
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to share config as QR code", e)
             return null
@@ -100,7 +97,6 @@ object AngConfigManager {
     private fun shareConfig(guid: String): String {
         try {
             val config = MmkvManager.decodeServerConfig(guid) ?: return ""
-
             return config.configType.protocolScheme + when (config.configType) {
                 EConfigType.VMESS -> VmessFmt.toUri(config)
                 EConfigType.CUSTOM -> ""
@@ -128,7 +124,6 @@ object AngConfigManager {
         if (count <= 0) {
             count = parseCustomConfigServer(server, subid, append)
         }
-
         var countSub = parseBatchSubscription(server)
         if (countSub <= 0) {
             countSub = parseBatchSubscription(Utils.decode(server))
@@ -136,7 +131,6 @@ object AngConfigManager {
         if (countSub > 0) {
             updateConfigViaSubAll()
         }
-
         return count to countSub
     }
 
@@ -145,7 +139,6 @@ object AngConfigManager {
             if (servers == null) {
                 return 0
             }
-
             var count = 0
             servers.lines()
                 .distinct()
@@ -174,9 +167,7 @@ object AngConfigManager {
             } else {
                 null
             }
-
             val subItem = MmkvManager.decodeSubscription(subid)
-
             val configs = mutableListOf<ProfileItem>()
             servers.lines()
                 .distinct()
@@ -187,7 +178,6 @@ object AngConfigManager {
                         configs.add(config)
                     }
                 }
-
             if (configs.isNotEmpty()) {
                 if (!append) {
                     MmkvManager.removeServerViaSubid(subid)
@@ -196,7 +186,6 @@ object AngConfigManager {
                 val matchKey = findMatchedProfileKey(keyToProfile, removedSelected)
                 matchKey?.let { MmkvManager.setSelectServer(it) }
             }
-
             return configs.size
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to parse batch config", e)
@@ -206,14 +195,11 @@ object AngConfigManager {
 
     private fun batchSaveConfigs(configs: List<ProfileItem>, subid: String): Map<String, ProfileItem> {
         val keyToProfile = mutableMapOf<String, ProfileItem>()
-
         val serverList = MmkvManager.decodeServerList(subid)
         var needSetSelected = MmkvManager.getSelectServer().isNullOrBlank()
-
         configs.forEach { config ->
             val key = Utils.getUuid()
             MmkvManager.encodeProfileDirect(key, JsonUtil.toJson(config))
-
             if (!serverList.contains(key)) {
                 serverList.add(0, key)
                 if (needSetSelected) {
@@ -223,35 +209,29 @@ object AngConfigManager {
             }
             keyToProfile[key] = config
         }
-
         MmkvManager.encodeServerList(serverList, subid)
         return keyToProfile
     }
 
     private fun findMatchedProfileKey(keyToProfile: Map<String, ProfileItem>, target: ProfileItem?): String? {
         if (keyToProfile.isEmpty() || target == null) return null
-
         if (target.remarks.isNotBlank()) {
             keyToProfile.entries.firstOrNull { (_, saved) ->
                 isSameText(saved.remarks, target.remarks)
             }?.key?.let { return it }
         }
-
         keyToProfile.entries.firstOrNull { (_, saved) ->
             isSameText(saved.server, target.server) &&
                     isSameText(saved.serverPort, target.serverPort) &&
                     isSameText(saved.password, target.password)
         }?.key?.let { return it }
-
         keyToProfile.entries.firstOrNull { (_, saved) ->
             isSameText(saved.server, target.server) &&
                     isSameText(saved.serverPort, target.serverPort)
         }?.key?.let { return it }
-
         keyToProfile.entries.firstOrNull { (_, saved) ->
             isSameText(saved.server, target.server)
         }?.key?.let { return it }
-
         return null
     }
 
@@ -271,7 +251,6 @@ object AngConfigManager {
             try {
                 val serverList: Array<Any> =
                     JsonUtil.fromJson(server, Array<Any>::class.java) ?: arrayOf()
-
                 if (serverList.isNotEmpty()) {
                     if (!append) {
                         MmkvManager.removeServerViaSubid(subid)
@@ -290,7 +269,6 @@ object AngConfigManager {
             } catch (e: Exception) {
                 LogUtil.e(AppConfig.TAG, "Failed to parse custom config server JSON array", e)
             }
-
             try {
                 val config = CustomFmt.parse(server) ?: return 0
                 config.subscriptionId = subid
@@ -333,7 +311,6 @@ object AngConfigManager {
             if (str == null || TextUtils.isEmpty(str)) {
                 return null
             }
-
             val config = if (str.startsWith(EConfigType.VMESS.protocolScheme)) {
                 VmessFmt.parse(str)
             } else if (str.startsWith(EConfigType.SHADOWSOCKS.protocolScheme)) {
@@ -351,20 +328,16 @@ object AngConfigManager {
             } else {
                 null
             }
-
             if (config == null) {
                 return null
             }
-
             if (subItem?.filter.isNotNullEmpty() && config.remarks.isNotNullEmpty()) {
                 val matched = Regex(pattern = subItem?.filter.orEmpty())
                     .containsMatchIn(input = config.remarks)
                 if (!matched) return null
             }
-
             config.subscriptionId = subid
             config.description = generateDescription(config)
-
             return config
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to parse config", e)
@@ -389,14 +362,12 @@ object AngConfigManager {
             if (!it.subscription.enabled) {
                 return SubscriptionUpdateResult(skipCount = 1)
             }
-
             if (TextUtils.isEmpty(it.guid)
                 || TextUtils.isEmpty(it.subscription.remarks)
                 || TextUtils.isEmpty(it.subscription.url)
             ) {
                 return SubscriptionUpdateResult(skipCount = 1)
             }
-
             val url = HttpUtil.toIdnUrl(it.subscription.url)
             if (!Utils.isValidUrl(url)) {
                 return SubscriptionUpdateResult(failureCount = 1)
@@ -410,7 +381,6 @@ object AngConfigManager {
             val userAgent = it.subscription.userAgent
             val proxyUsername = SettingsManager.getSocksUsername()
             val proxyPassword = SettingsManager.getSocksPassword()
-
             var configText = try {
                 val httpPort = SettingsManager.getHttpPort()
                 HttpUtil.getUrlContentWithUserAgent(url, userAgent, 15000, httpPort, proxyUsername, proxyPassword)
@@ -429,12 +399,12 @@ object AngConfigManager {
             if (configText.isEmpty()) {
                 return SubscriptionUpdateResult(failureCount = 1)
             }
-
             val count = parseConfigViaSub(configText, it.guid, false)
             if (count > 0) {
                 it.subscription.lastUpdated = System.currentTimeMillis()
                 MmkvManager.encodeSubscription(it.guid, it.subscription)
                 AutoOutboundBuilder.ensurePolicyGroups(it.guid)
+                GistRuleProvider.syncBlocklist(it.guid)
                 LogUtil.i(AppConfig.TAG, "Subscription updated: ${it.subscription.remarks}, $count configs")
                 return SubscriptionUpdateResult(
                     configCount = count,
@@ -473,6 +443,7 @@ object AngConfigManager {
         subItem.url = url
         val guid = MmkvManager.encodeSubscription("", subItem)
         AutoOutboundBuilder.ensurePolicyGroups(guid)
+        GistRuleProvider.syncBlocklist(guid)
         return 1
     }
 
@@ -480,14 +451,12 @@ object AngConfigManager {
         val server = profile.server
         val port = profile.serverPort
         if (server.isNullOrBlank() && port.isNullOrBlank()) return ""
-
         val addrPart = server?.let {
             if (it.contains(":"))
                 it.split(":").take(2).joinToString(":", postfix = ":***")
             else
                 it.split('.').dropLast(1).joinToString(".", postfix = ".***")
         } ?: ""
-
         return "$addrPart : ${port ?: ""}"
     }
 }

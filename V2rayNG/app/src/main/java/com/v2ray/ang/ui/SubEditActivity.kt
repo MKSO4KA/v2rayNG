@@ -87,6 +87,7 @@ class SubEditActivity : BaseActivity() {
         binding.etPreProfile.text = Utils.getEditable(subItem.prevProfile)
         binding.etNextProfile.text = Utils.getEditable(subItem.nextProfile)
         binding.etAutoGroupGistUrl.text = Utils.getEditable(subItem.autoGroupGistUrl)
+        binding.etBlocklistGistUrl.text = Utils.getEditable(subItem.blocklistGistUrl)
         return true
     }
 
@@ -99,6 +100,7 @@ class SubEditActivity : BaseActivity() {
         binding.etPreProfile.text = null
         binding.etNextProfile.text = null
         binding.etAutoGroupGistUrl.text = null
+        binding.etBlocklistGistUrl.text = null
         return true
     }
 
@@ -133,6 +135,7 @@ class SubEditActivity : BaseActivity() {
         subItem.nextProfile = binding.etNextProfile.text.toString()
         subItem.allowInsecureUrl = binding.allowInsecureUrl.isChecked
         subItem.autoGroupGistUrl = binding.etAutoGroupGistUrl.text.toString().trim()
+        subItem.blocklistGistUrl = binding.etBlocklistGistUrl.text.toString().trim()
 
         if (TextUtils.isEmpty(subItem.remarks)) {
             toast(R.string.sub_setting_remarks)

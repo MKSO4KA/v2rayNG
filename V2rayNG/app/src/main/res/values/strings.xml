@@ -302,6 +302,7 @@
     <string name="auto_group_remarks">Group Name (Remarks)</string>
     <string name="auto_group_regex">Regex Filter</string>
     <string name="sub_setting_auto_group_gist_url">Auto-Groups Gist URL (Secret JSON)</string>
+    <string name="sub_setting_blocklist_gist_url">Blocklist Gist URL (JSON)</string>
     <string name="toast_gist_rule_readonly">Rules imported from Gist are read-only.</string>
 
     <string name="sub_setting_remarks">remarks</string>

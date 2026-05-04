@@ -63,6 +63,11 @@
         </menu>
     </item>
     <item
+        android:id="@+id/qs_tile_config"
+        android:icon="@drawable/ic_qu_switch_24dp"
+        android:title="@string/qs_tile_config_title"
+        app:showAsAction="ifRoom" />
+    <item
         android:id="@+id/service_restart"
         android:title="@string/title_service_restart"
         app:showAsAction="never" />
@@ -107,3 +112,4 @@
         android:title="@string/title_sub_update"
         app:showAsAction="never" />
 </menu>
+

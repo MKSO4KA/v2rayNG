@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="16dp"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/qs_tile_config_desc"
+        android:layout_marginBottom="16dp" />
+
+    <RadioGroup
+        android:id="@+id/rg_mode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        
+        <RadioButton 
+            android:id="@+id/rb_default" 
+            android:text="@string/qs_tile_mode_default" 
+            android:layout_width="match_parent" 
+            android:layout_height="wrap_content"/>
+            
+        <RadioButton 
+            android:id="@+id/rb_best_ping" 
+            android:text="@string/qs_tile_mode_best_ping" 
+            android:layout_width="match_parent" 
+            android:layout_height="wrap_content"/>
+            
+        <RadioButton 
+            android:id="@+id/rb_policy_group" 
+            android:text="@string/qs_tile_mode_policy" 
+            android:layout_width="match_parent" 
+            android:layout_height="wrap_content"/>
+            
+        <RadioButton 
+            android:id="@+id/rb_regex" 
+            android:text="@string/qs_tile_mode_regex" 
+            android:layout_width="match_parent" 
+            android:layout_height="wrap_content"/>
+    </RadioGroup>
+
+    <EditText
+        android:id="@+id/et_val"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:hint="@string/qs_tile_val_hint" />
+
+</LinearLayout>
+

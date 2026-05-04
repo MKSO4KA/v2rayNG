@@ -48,16 +48,62 @@ object V2RayServiceManager {
             }
         }
 
-    fun startVServiceFromToggle(context: Context): Boolean {
-        var targetGuid = SettingsManager.getQsTileTargetGuid()
-        var targetConfig = targetGuid?.let { MmkvManager.decodeServerConfig(it) }
+    private fun resolveQsTileTarget(): String? {
+        val mode = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_MODE, "0")
+        val value = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_VAL, "")
+        val allServers = MmkvManager.decodeAllServerList()
+        
+        LogUtil.i(AppConfig.TAG, "QSTile target resolving: mode=$mode, value=$value, total servers found=${allServers.size}")
 
-        if (targetConfig == null) {
-            targetGuid = SettingsManager.getBestPingGuid()
-            targetConfig = targetGuid?.let { MmkvManager.decodeServerConfig(it) }
+        when (mode) {
+            "1" -> { 
+                val target = SettingsManager.getBestPingGuid()
+                LogUtil.i(AppConfig.TAG, "QSTile resolved mode 1: best ping target=$target")
+                return target
+            }
+            "2" -> { 
+                if (value.isNullOrBlank()) return SettingsManager.getBestPingGuid()
+                val target = allServers.find { guid ->
+                    val config = MmkvManager.decodeServerConfig(guid)
+                    config?.configType == EConfigType.POLICYGROUP && config.remarks.equals(value, true)
+                } ?: SettingsManager.getBestPingGuid()
+                LogUtil.i(AppConfig.TAG, "QSTile resolved mode 2: specific policy target=$target")
+                return target
+            }
+            "3", "4" -> { 
+                val regex = value ?: ""
+                val interval = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_INTERVAL, "3m") ?: "3m"
+                val tolerance = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_TOLERANCE, "50.0")?.toDoubleOrNull() ?: 50.0
+                
+                val globalGroupGuid = allServers.find { guid ->
+                    val config = MmkvManager.decodeServerConfig(guid)
+                    config?.configType == EConfigType.POLICYGROUP && config.remarks == "Global QS Target"
+                }
+                
+                val config = MmkvManager.decodeServerConfig(globalGroupGuid ?: "") ?: ProfileItem.create(EConfigType.POLICYGROUP)
+                config.remarks = "Global QS Target"
+                config.policyGroupType = "0" // Least Ping is best for a quick tile regex match
+                config.policyGroupSubscriptionId = null // All subscriptions
+                config.policyGroupFilter = regex
+                config.policyGroupInterval = interval
+                config.policyGroupTolerance = tolerance
+                config.description = "Global Quick Tile Auto-Group"
+                
+                val savedGuid = MmkvManager.encodeServerConfig(globalGroupGuid ?: "", config)
+                LogUtil.i(AppConfig.TAG, "QSTile resolved mode $mode: generated global regex policy=$savedGuid")
+                return savedGuid
+            }
+            else -> { 
+                val target = MmkvManager.getSelectServer() ?: SettingsManager.getBestPingGuid()
+                LogUtil.i(AppConfig.TAG, "QSTile resolved mode $mode: default selected target=$target")
+                return target
+            }
         }
+    }
 
-        if (targetGuid != null && targetConfig != null) {
+    fun startVServiceFromToggle(context: Context): Boolean {
+        val targetGuid = resolveQsTileTarget()
+        if (targetGuid != null) {
             MmkvManager.setSelectServer(targetGuid)
         }
 

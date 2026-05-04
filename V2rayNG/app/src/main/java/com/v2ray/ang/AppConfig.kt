@@ -78,7 +78,14 @@ object AppConfig {
     const val PREF_HEV_TUNNEL_RW_TIMEOUT = "pref_hev_tunnel_rw_timeout_v2"
     const val PREF_AUTO_REMOVE_INVALID_AFTER_TEST = "pref_auto_remove_invalid_after_test"
     const val PREF_AUTO_SORT_AFTER_TEST = "pref_auto_sort_after_test"
+    
+    // Quick Tile Config
     const val PREF_QS_TILE_TARGET_GUID = "pref_qs_tile_target_guid"
+    const val PREF_QS_TILE_MODE = "pref_qs_tile_mode"
+    const val PREF_QS_TILE_VAL = "pref_qs_tile_val"
+    const val PREF_QS_TILE_GIST_URL = "pref_qs_tile_gist_url"
+    const val PREF_QS_TILE_INTERVAL = "pref_qs_tile_interval"
+    const val PREF_QS_TILE_TOLERANCE = "pref_qs_tile_tolerance"
 
     /** Cache keys. */
     const val CACHE_SUBSCRIPTION_ID = "cache_subscription_id"

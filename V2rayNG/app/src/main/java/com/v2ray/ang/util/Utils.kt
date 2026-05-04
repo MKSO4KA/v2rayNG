@@ -106,7 +106,10 @@ object Utils {
      * @return The decoded string, or an empty string if decoding fails.
      */
     fun decode(text: String?): String {
-        return tryDecodeBase64(text) ?: text?.trimEnd('=')?.let { tryDecodeBase64(it) }.orEmpty()
+        if (text.isNullOrEmpty()) return ""
+        // Remove whitespaces and newlines that can break Base64 decoding
+        val cleanText = text.replace(Regex("\\s+"), "")
+        return tryDecodeBase64(cleanText) ?: cleanText.trimEnd('=').let { tryDecodeBase64(it) }.orEmpty()
     }
 
     /**
@@ -118,15 +121,20 @@ object Utils {
     fun tryDecodeBase64(text: String?): String? {
         if (text.isNullOrEmpty()) return null
 
+        var padded = text
+        while (padded.length % 4 != 0) {
+            padded += "="
+        }
+
         try {
-            return Base64.decode(text, Base64.NO_WRAP).toString(Charsets.UTF_8)
+            return Base64.decode(padded, Base64.NO_WRAP).toString(Charsets.UTF_8)
         } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "Failed to decode standard base64", e)
+            LogUtil.d(AppConfig.TAG, "Failed to decode standard base64 for input length ${text.length}")
         }
         try {
-            return Base64.decode(text, Base64.NO_WRAP.or(Base64.URL_SAFE)).toString(Charsets.UTF_8)
+            return Base64.decode(padded, Base64.NO_WRAP.or(Base64.URL_SAFE)).toString(Charsets.UTF_8)
         } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "Failed to decode URL-safe base64", e)
+            LogUtil.d(AppConfig.TAG, "Failed to decode URL-safe base64 for input length ${text.length}")
         }
         return null
     }
@@ -603,3 +611,4 @@ object Utils {
         }
     }
 }
+

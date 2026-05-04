@@ -202,7 +202,7 @@ object SettingsManager {
         if (IsDynamicSocksPort()) {
             runtimeSocksPort = generateRandomSocksPort()
             return runtimeSocksPort
-        }
+        } 
         return null
     }
 
@@ -422,10 +422,10 @@ object SettingsManager {
         }
     }
 
+    // Legacy Quick Tile (deprecated) preserved for compatibility checks only
     fun getQsTileTargetGuid(): String? {
         return MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_TARGET_GUID)
     }
-
     fun setQsTileTargetGuid(guid: String) {
         MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_TARGET_GUID, guid)
     }

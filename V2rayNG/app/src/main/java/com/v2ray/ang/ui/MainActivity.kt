@@ -294,6 +294,11 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             true
         }
 
+        R.id.qs_tile_config -> {
+            startActivity(Intent(this, QsTileConfigActivity::class.java))
+            true
+        }
+
         R.id.export_all -> {
             exportAll()
             true
@@ -649,3 +654,4 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         super.onDestroy()
     }
 }
+

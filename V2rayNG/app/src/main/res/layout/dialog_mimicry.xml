@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="@dimen/padding_spacing_dp16">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Radar Header -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            app:cardBackgroundColor="?attr/colorSurface"
+            app:cardElevation="0dp"
+            app:strokeColor="?attr/colorOutlineVariant"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="12dp"
+                android:gravity="center_vertical">
+
+                <FrameLayout
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="@drawable/bg_radar_circle"
+                    android:layout_marginEnd="12dp">
+                    
+                    <ImageView
+                        android:id="@+id/iv_radar_sweep"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:src="@drawable/radar_sweep"
+                        android:visibility="invisible" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+                    
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+                        <TextView
+                            android:id="@+id/tv_radar_title"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="RADAR"
+                            android:textStyle="bold"
+                            android:textSize="16sp"
+                            android:textColor="?attr/colorPrimary" />
+                        <ImageView
+                            android:id="@+id/iv_radar_faq"
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:layout_marginStart="6dp"
+                            android:src="@drawable/ic_about_24dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:clickable="true" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tv_radar_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/mimicry_radar_status_inactive"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/btn_start_radar"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/mimicry_radar_start" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <TextView
+            android:id="@+id/tv_radar_instructions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/mimicry_instructions"
+            android:textSize="12sp"
+            android:textColor="?attr/colorOutline"
+            android:layout_marginBottom="16dp"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:lineSpacingExtra="2dp" />
+
+        <!-- Preset Controls -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
+
+            <TextView
+                android:id="@+id/tv_preset_selector"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/mimicry_preset_select"
+                android:textColor="?attr/colorPrimary"
+                android:textSize="16sp"
+                android:padding="8dp"
+                android:background="?attr/selectableItemBackground"
+                app:drawableEndCompat="@drawable/ic_arrow_drop_down" />
+
+            <Button
+                android:id="@+id/btn_save_preset"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                style="?attr/borderlessButtonStyle"
+                android:text="@string/mimicry_preset_save" />
+        </LinearLayout>
+
+        <!-- Reset Button -->
+        <Button
+            android:id="@+id/btn_reset_mimicry"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            style="?attr/borderlessButtonStyle"
+            android:textColor="?attr/colorError"
+            android:text="Reset to App Defaults"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Fields -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/sub_setting_user_agent" />
+        <EditText
+            android:id="@+id/et_user_agent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sub_setting_model" />
+        <EditText
+            android:id="@+id/et_model"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sub_setting_hwid" />
+        <EditText
+            android:id="@+id/et_hwid"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sub_setting_os" />
+        <EditText
+            android:id="@+id/et_os"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sub_setting_osver" />
+        <EditText
+            android:id="@+id/et_os_ver"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sub_setting_appver" />
+        <EditText
+            android:id="@+id/et_app_ver"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sub_setting_encoding" />
+        <EditText
+            android:id="@+id/et_encoding"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sub_setting_locale" />
+        <EditText
+            android:id="@+id/et_locale"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/sub_setting_lang" />
+        <EditText
+            android:id="@+id/et_lang"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text" />
+
+    </LinearLayout>
+</ScrollView>
+

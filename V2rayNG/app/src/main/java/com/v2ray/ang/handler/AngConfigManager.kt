@@ -20,7 +20,6 @@ import com.v2ray.ang.fmt.TrojanFmt
 import com.v2ray.ang.fmt.VlessFmt
 import com.v2ray.ang.fmt.VmessFmt
 import com.v2ray.ang.fmt.WireguardFmt
-import com.v2ray.ang.handler.AutoOutboundBuilder
 import com.v2ray.ang.util.HttpUtil
 import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.LogUtil
@@ -29,6 +28,13 @@ import com.v2ray.ang.util.Utils
 import java.net.URI
 
 object AngConfigManager {
+
+    private val SECURE_RANDOM = java.security.SecureRandom()
+    private const val MASK_PREFIX = "[[MASK]]"
+    private const val DIGITS = "0123456789"
+    private const val LOWERS = "abcdefghijklmnopqrstuvwxyz"
+    private const val UPPERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    private const val ALPHAS = DIGITS + LOWERS + UPPERS
 
     fun share2Clipboard(context: Context, guid: String): Int {
         try {
@@ -141,6 +147,8 @@ object AngConfigManager {
             }
             var count = 0
             servers.lines()
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
                 .distinct()
                 .forEach { str ->
                     if (Utils.isValidSubUrl(str)) {
@@ -170,6 +178,8 @@ object AngConfigManager {
             val subItem = MmkvManager.decodeSubscription(subid)
             val configs = mutableListOf<ProfileItem>()
             servers.lines()
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
                 .distinct()
                 .reversed()
                 .forEach {
@@ -311,6 +321,9 @@ object AngConfigManager {
             if (str == null || TextUtils.isEmpty(str)) {
                 return null
             }
+            val debugStr = if (str.length > 60) str.substring(0, 60) + "..." else str
+            LogUtil.d(AppConfig.TAG, "Attempting to parse config string: $debugStr")
+
             val config = if (str.startsWith(EConfigType.VMESS.protocolScheme)) {
                 VmessFmt.parse(str)
             } else if (str.startsWith(EConfigType.SHADOWSOCKS.protocolScheme)) {
@@ -326,6 +339,7 @@ object AngConfigManager {
             } else if (str.startsWith(EConfigType.HYSTERIA2.protocolScheme) || str.startsWith(HY2)) {
                 Hysteria2Fmt.parse(str)
             } else {
+                LogUtil.d(AppConfig.TAG, "Unknown scheme or unsupported config format: $debugStr")
                 null
             }
             if (config == null) {
@@ -334,7 +348,10 @@ object AngConfigManager {
             if (subItem?.filter.isNotNullEmpty() && config.remarks.isNotNullEmpty()) {
                 val matched = Regex(pattern = subItem?.filter.orEmpty())
                     .containsMatchIn(input = config.remarks)
-                if (!matched) return null
+                if (!matched) {
+                    LogUtil.d(AppConfig.TAG, "Config excluded by filter: ${config.remarks}")
+                    return null
+                }
             }
             config.subscriptionId = subid
             config.description = generateDescription(config)
@@ -343,6 +360,35 @@ object AngConfigManager {
             LogUtil.e(AppConfig.TAG, "Failed to parse config", e)
             return null
         }
+    }
+
+    private fun applyMimicryMask(input: String?): String? {
+        if (input == null || !input.startsWith(MASK_PREFIX)) return input
+        var output = input.substring(MASK_PREFIX.length)
+
+        try {
+            while (output.contains("<<D>>")) output = output.replaceFirst("<<D>>", DIGITS[SECURE_RANDOM.nextInt(DIGITS.length)].toString())
+            while (output.contains("<<L>>")) output = output.replaceFirst("<<L>>", LOWERS[SECURE_RANDOM.nextInt(LOWERS.length)].toString())
+            while (output.contains("<<U>>")) output = output.replaceFirst("<<U>>", UPPERS[SECURE_RANDOM.nextInt(UPPERS.length)].toString())
+            while (output.contains("<<A>>")) output = output.replaceFirst("<<A>>", ALPHAS[SECURE_RANDOM.nextInt(ALPHAS.length)].toString())
+
+            val rndRegex = Regex("<<RND:(\\d+)>>")
+            output = rndRegex.replace(output) { matchResult ->
+                val len = matchResult.groupValues[1].toIntOrNull() ?: 10
+                (1..len).map { ALPHAS[SECURE_RANDOM.nextInt(ALPHAS.length)] }.joinToString("")
+            }
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Failed to process Mimicry Mask for input: $input", e)
+            return input
+        }
+
+        LogUtil.d(AppConfig.TAG, "Mimicry Mask Applied: Original='$input' -> Result='$output'")
+        return output
+    }
+
+    private fun sanitizeHeaderValue(value: String): String {
+        // Strip non-ASCII characters as OkHttp strictly rejects them causing IllegalStateException
+        return value.replace(Regex("[^\\x20-\\x7E]"), "")
     }
 
     fun updateConfigViaSubAll(): SubscriptionUpdateResult {
@@ -377,28 +423,54 @@ object AngConfigManager {
                     return SubscriptionUpdateResult(failureCount = 1)
                 }
             }
-            LogUtil.i(AppConfig.TAG, url)
-            val userAgent = it.subscription.userAgent
-            val proxyUsername = SettingsManager.getSocksUsername()
-            val proxyPassword = SettingsManager.getSocksPassword()
+            
+            LogUtil.i(AppConfig.TAG, "Starting subscription update for: $url")
+            
+            val headers = mutableMapOf<String, String>()
+            
+            it.subscription.userAgent?.takeIf { v -> v.isNotBlank() }?.let { v -> headers["User-Agent"] = sanitizeHeaderValue(applyMimicryMask(v) ?: v) }
+            it.subscription.model?.takeIf { v -> v.isNotBlank() }?.let { v -> headers["X-Device-Model"] = sanitizeHeaderValue(applyMimicryMask(v) ?: v) }
+            it.subscription.hwid?.takeIf { v -> v.isNotBlank() }?.let { v -> headers["X-HWID"] = sanitizeHeaderValue(applyMimicryMask(v) ?: v) }
+            it.subscription.os?.takeIf { v -> v.isNotBlank() }?.let { v -> headers["X-Device-OS"] = sanitizeHeaderValue(applyMimicryMask(v) ?: v) }
+            it.subscription.osVer?.takeIf { v -> v.isNotBlank() }?.let { v -> headers["X-Ver-OS"] = sanitizeHeaderValue(applyMimicryMask(v) ?: v) }
+            it.subscription.appVer?.takeIf { v -> v.isNotBlank() }?.let { v -> headers["X-App-Version"] = sanitizeHeaderValue(applyMimicryMask(v) ?: v) }
+            it.subscription.encoding?.takeIf { v -> v.isNotBlank() }?.let { v -> headers["Accept-Encoding"] = sanitizeHeaderValue(applyMimicryMask(v) ?: v) }
+            it.subscription.locale?.takeIf { v -> v.isNotBlank() }?.let { v -> headers["X-Device-Locale"] = sanitizeHeaderValue(applyMimicryMask(v) ?: v) }
+            it.subscription.lang?.takeIf { v -> v.isNotBlank() }?.let { v -> headers["Accept-Language"] = sanitizeHeaderValue(applyMimicryMask(v) ?: v) }
+
+            LogUtil.i(AppConfig.TAG, "Subscription Update Headers sent: $headers")
+
+            // Smart proxy fallback to avoid 15s connection timeouts if core isn't running
+            val useProxy = V2RayServiceManager.isRunning()
+            val proxyUsername = if (useProxy) SettingsManager.getSocksUsername() else null
+            val proxyPassword = if (useProxy) SettingsManager.getSocksPassword() else null
+            val httpPort = if (useProxy) SettingsManager.getHttpPort() else 0
+
             var configText = try {
-                val httpPort = SettingsManager.getHttpPort()
-                HttpUtil.getUrlContentWithUserAgent(url, userAgent, 15000, httpPort, proxyUsername, proxyPassword)
+                HttpUtil.getUrlContentWithCustomHeaders(url, headers, 15000, httpPort, proxyUsername, proxyPassword)
             } catch (e: Exception) {
-                LogUtil.e(AppConfig.ANG_PACKAGE, "Update subscription: proxy not ready or other error", e)
+                LogUtil.e(AppConfig.ANG_PACKAGE, "Update subscription: network error during request", e)
                 ""
             }
+            
+            // If proxy failed or wasn't running, retry instantly without proxy
             if (configText.isEmpty()) {
+                if (useProxy) LogUtil.i(AppConfig.TAG, "Proxy update failed, retrying without proxy...")
                 configText = try {
-                    HttpUtil.getUrlContentWithUserAgent(url, userAgent)
+                    HttpUtil.getUrlContentWithCustomHeaders(url, headers)
                 } catch (e: Exception) {
-                    LogUtil.e(AppConfig.TAG, "Update subscription: Failed to get URL content with user agent", e)
+                    LogUtil.e(AppConfig.TAG, "Update subscription: Failed to get URL content directly", e)
                     ""
                 }
             }
+            
             if (configText.isEmpty()) {
+                LogUtil.e(AppConfig.TAG, "Update subscription: Received empty configuration body.")
                 return SubscriptionUpdateResult(failureCount = 1)
             }
+
+            LogUtil.i(AppConfig.TAG, "Received subscription config text length: ${configText.length}")
+            
             val count = parseConfigViaSub(configText, it.guid, false)
             if (count > 0) {
                 it.subscription.lastUpdated = System.currentTimeMillis()
@@ -411,6 +483,7 @@ object AngConfigManager {
                     successCount = 1
                 )
             } else {
+                LogUtil.e(AppConfig.TAG, "Update subscription: Failed to parse configuration from response string.")
                 return SubscriptionUpdateResult(failureCount = 1)
             }
         } catch (e: Exception) {
@@ -420,13 +493,20 @@ object AngConfigManager {
     }
 
     private fun parseConfigViaSub(server: String?, subid: String, append: Boolean): Int {
-        var count = parseBatchConfig(Utils.decode(server), subid, append)
+        LogUtil.d(AppConfig.TAG, "Parsing config via sub. Input length: ${server?.length}")
+        val decodedServer = Utils.decode(server)
+        LogUtil.d(AppConfig.TAG, "Decoded config via sub length: ${decodedServer.length}")
+
+        var count = parseBatchConfig(decodedServer, subid, append)
         if (count <= 0) {
+            LogUtil.d(AppConfig.TAG, "Failed to parse decoded batch config, trying raw...")
             count = parseBatchConfig(server, subid, append)
         }
         if (count <= 0) {
+            LogUtil.d(AppConfig.TAG, "Failed to parse raw batch config, trying custom config...")
             count = parseCustomConfigServer(server, subid, append)
         }
+        LogUtil.i(AppConfig.TAG, "parseConfigViaSub resulting config count: $count")
         return count
     }
 

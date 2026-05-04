@@ -307,6 +307,15 @@
 
     <string name="sub_setting_remarks">remarks</string>
     <string name="sub_setting_url">Optional URL</string>
+    <string name="sub_setting_mimicry">Mimicry Settings</string>
+    <string name="sub_setting_model">Model</string>
+    <string name="sub_setting_hwid">HWID</string>
+    <string name="sub_setting_os">OS</string>
+    <string name="sub_setting_osver">OSVer</string>
+    <string name="sub_setting_appver">AppVer</string>
+    <string name="sub_setting_encoding">Encoding</string>
+    <string name="sub_setting_locale">Locale</string>
+    <string name="sub_setting_lang">Lang</string>
     <string name="sub_setting_user_agent">User Agent</string>
     <string name="sub_setting_filter">Remarks regular filter</string>
     <string name="sub_setting_enable">Enable update</string>
@@ -403,6 +412,28 @@
     <string name="title_webdav_user">Username</string>
     <string name="title_webdav_pass">Password</string>
     <string name="title_webdav_remote_path">Remote directory (optional)</string>
+
+    <!-- Mimicry -->
+    <string name="mimicry_radar_start">SCAN</string>
+    <string name="mimicry_radar_cancel">CANCEL</string>
+    <string name="mimicry_radar_status_inactive">Radar inactive</string>
+    <string name="mimicry_radar_status_listening">Listening... Send GET (1/3)\nCopied: %s</string>
+    <string name="mimicry_radar_status_timeout">Radar timed out.</string>
+    <string name="mimicry_radar_status_done">Triangulation complete! Preset ready.</string>
+    <string name="mimicry_preset_save">Save Preset</string>
+    <string name="mimicry_preset_select">Select Preset</string>
+    <string name="mimicry_instructions">1. Start Radar\n2. Paste the copied link into your other VPN app\n3. Refresh the subscription 3 times</string>
+    <string name="mimicry_faq_title">What is Mimicry?</string>
+    <string name="mimicry_faq_content">Mimicry allows you to spoof your device\'s fingerprint by intercepting and copying headers from other apps. Start the radar, paste the generated link as a subscription in another app, and update it 3 times to capture its fingerprint.</string>
+
+    <!-- Quick Tile Config -->
+    <string name="qs_tile_config_title">Quick Tile Mode</string>
+    <string name="qs_tile_config_desc">Choose what happens when you press the Quick Settings Tile in Android.</string>
+    <string name="qs_tile_mode_default">Last Selected (Default)</string>
+    <string name="qs_tile_mode_best_ping">Connect to Best Ping (Global)</string>
+    <string name="qs_tile_mode_policy">Specific Policy Group</string>
+    <string name="qs_tile_mode_regex">Regex Match (Best Ping)</string>
+    <string name="qs_tile_val_hint">Group Name / Regex Pattern</string>
 
     <string-array name="share_method">
         <item>QRcode</item>

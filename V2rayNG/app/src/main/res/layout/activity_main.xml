@@ -18,7 +18,39 @@
             <androidx.appcompat.widget.Toolbar
                 android:id="@+id/toolbar"
                 android:layout_width="match_parent"
-                android:layout_height="?attr/actionBarSize" />
+                android:layout_height="?attr/actionBarSize">
+                
+                <LinearLayout
+                    android:id="@+id/ll_qt_center"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="center"
+                    android:gravity="center"
+                    android:orientation="horizontal"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp">
+
+                    <ImageView
+                        android:id="@+id/iv_qt_icon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_qu_switch_24dp"
+                        app:tint="?attr/colorControlNormal" />
+
+                    <TextView
+                        android:id="@+id/tv_qt_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="Quick Tile"
+                        android:textAppearance="@style/TextAppearance.AppCompat.Widget.ActionBar.Title"
+                        android:textSize="16sp" />
+                </LinearLayout>
+
+            </androidx.appcompat.widget.Toolbar>
 
         </com.google.android.material.appbar.AppBarLayout>
 
@@ -110,6 +142,9 @@
                         android:src="@drawable/ic_play_24dp"
                         app:tint="@color/colorWhite"
                         app:useCompatPadding="true"
+                        app:elevation="0dp"
+                        app:hoveredFocusedTranslationZ="0dp"
+                        app:pressedTranslationZ="0dp"
                         app:layout_anchorGravity="bottom|right|end" />
 
                 </FrameLayout>
@@ -128,3 +163,4 @@
     </com.google.android.material.navigation.NavigationView>
 
 </androidx.drawerlayout.widget.DrawerLayout>
+

@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.dto.ProfileItem
+import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.extension.toSpeedString
 import com.v2ray.ang.ui.MainActivity
 import com.v2ray.ang.util.LogUtil
@@ -47,8 +48,31 @@ object NotificationManager {
         if (speedNotificationJob != null || V2RayServiceManager.isRunning() == false) return
 
         var lastZeroSpeed = false
-        val outboundTags = currentConfig?.getAllOutboundTags()
-        outboundTags?.remove(AppConfig.TAG_DIRECT)
+        
+        val outboundTags = mutableListOf<String>()
+        val tagToNameMap = mutableMapOf<String, String>()
+        var initialActiveProxyName: String? = null
+
+        if (currentConfig?.configType == EConfigType.POLICYGROUP) {
+            val configPairs = AutoOutboundBuilder.getFilteredRoutingProxies(currentConfig.policyGroupFilter, currentConfig.policyGroupSubscriptionId)
+            val bestPair = configPairs.minByOrNull { 
+                val delay = MmkvManager.decodeServerAffiliationInfo(it.first)?.testDelayMillis ?: 0L
+                if (delay <= 0L) 999999L else delay
+            }
+            initialActiveProxyName = bestPair?.second?.remarks
+
+            configPairs.forEachIndexed { index, pair ->
+                val tag = "proxy-${index + 1}"
+                outboundTags.add(tag)
+                tagToNameMap[tag] = pair.second.remarks
+            }
+        } else {
+            currentConfig?.getAllOutboundTags()?.let { tags ->
+                tags.remove(AppConfig.TAG_DIRECT)
+                outboundTags.addAll(tags)
+                tags.forEach { tagToNameMap[it] = currentConfig.remarks }
+            }
+        }
 
         speedNotificationJob = CoroutineScope(Dispatchers.IO).launch {
             while (isActive) {
@@ -66,26 +90,41 @@ object NotificationManager {
 
                 var proxyTotal = 0L
                 val text = StringBuilder()
-                outboundTags?.forEach {
-                    val up = V2RayServiceManager.queryStats(it, AppConfig.UPLINK)
-                    val down = V2RayServiceManager.queryStats(it, AppConfig.DOWNLINK)
+                var maxTraffic = -1L
+                var activeProxyName: String? = initialActiveProxyName
+
+                outboundTags.forEach { tag ->
+                    val up = V2RayServiceManager.queryStats(tag, AppConfig.UPLINK)
+                    val down = V2RayServiceManager.queryStats(tag, AppConfig.DOWNLINK)
                     if (up + down > 0) {
-                        appendSpeedString(text, it, up / sinceLastQueryInSeconds, down / sinceLastQueryInSeconds)
-                        proxyTotal += up + down
+                        appendSpeedString(text, tagToNameMap[tag] ?: tag, up / sinceLastQueryInSeconds, down / sinceLastQueryInSeconds)
+                        proxyTotal += (up + down)
+                        if ((up + down) > maxTraffic) {
+                            maxTraffic = (up + down)
+                            activeProxyName = tagToNameMap[tag]
+                        }
                     }
                 }
                 val directUplink = V2RayServiceManager.queryStats(AppConfig.TAG_DIRECT, AppConfig.UPLINK)
                 val directDownlink = V2RayServiceManager.queryStats(AppConfig.TAG_DIRECT, AppConfig.DOWNLINK)
                 val zeroSpeed = proxyTotal == 0L && directUplink == 0L && directDownlink == 0L
+                
                 if (!zeroSpeed || !lastZeroSpeed) {
                     if (proxyTotal == 0L) {
-                        appendSpeedString(text, outboundTags?.firstOrNull(), 0.0, 0.0)
+                        appendSpeedString(text, outboundTags.firstOrNull()?.let { tagToNameMap[it] ?: it }, 0.0, 0.0)
                     }
                     appendSpeedString(
                         text, AppConfig.TAG_DIRECT, directUplink / sinceLastQueryInSeconds,
                         directDownlink / sinceLastQueryInSeconds
                     )
-                    updateNotification(text.toString(), proxyTotal, directDownlink + directUplink)
+                    
+                    val title = if (currentConfig?.configType == EConfigType.POLICYGROUP && activeProxyName != null) {
+                        "QT → $activeProxyName"
+                    } else {
+                        currentConfig?.remarks
+                    }
+                    
+                    updateNotification(title, text.toString(), proxyTotal, directDownlink + directUplink)
                 }
                 lastZeroSpeed = zeroSpeed
                 lastQueryTime = queryTime
@@ -103,6 +142,18 @@ object NotificationManager {
 
         // Reset last query time to avoid querying stats too soon after showing the notification
         lastQueryTime = System.currentTimeMillis()
+
+        var initialTitle = currentConfig?.remarks
+        if (currentConfig?.configType == EConfigType.POLICYGROUP) {
+            val configPairs = AutoOutboundBuilder.getFilteredRoutingProxies(currentConfig.policyGroupFilter, currentConfig.policyGroupSubscriptionId)
+            val bestPair = configPairs.minByOrNull { 
+                val delay = MmkvManager.decodeServerAffiliationInfo(it.first)?.testDelayMillis ?: 0L
+                if (delay <= 0L) 999999L else delay
+            }
+            if (bestPair != null) {
+                initialTitle = "QT → ${bestPair.second.remarks}"
+            }
+        }
 
         val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
 
@@ -130,7 +181,7 @@ object NotificationManager {
 
         mBuilder = NotificationCompat.Builder(service, channelId)
             .setSmallIcon(R.drawable.ic_stat_name)
-            .setContentTitle(currentConfig?.remarks)
+            .setContentTitle(initialTitle)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setOngoing(true)
             .setShowWhen(false)
@@ -173,7 +224,7 @@ object NotificationManager {
         speedNotificationJob?.let {
             it.cancel()
             speedNotificationJob = null
-            updateNotification(currentConfig?.remarks, 0, 0)
+            updateNotification(currentConfig?.remarks, "", 0, 0)
         }
     }
 
@@ -198,11 +249,12 @@ object NotificationManager {
 
     /**
      * Updates the notification with the given content text and traffic data.
+     * @param title The dynamic title of the notification.
      * @param contentText The content text.
      * @param proxyTraffic The proxy traffic.
      * @param directTraffic The direct traffic.
      */
-    private fun updateNotification(contentText: String?, proxyTraffic: Long, directTraffic: Long) {
+    private fun updateNotification(title: String?, contentText: String?, proxyTraffic: Long, directTraffic: Long) {
         if (mBuilder != null) {
             if (proxyTraffic < NOTIFICATION_ICON_THRESHOLD && directTraffic < NOTIFICATION_ICON_THRESHOLD) {
                 mBuilder?.setSmallIcon(R.drawable.ic_stat_name)
@@ -211,6 +263,7 @@ object NotificationManager {
             } else {
                 mBuilder?.setSmallIcon(R.drawable.ic_stat_direct)
             }
+            mBuilder?.setContentTitle(title)
             mBuilder?.setStyle(NotificationCompat.BigTextStyle().bigText(contentText))
             mBuilder?.setContentText(contentText)
             getNotificationManager()?.notify(NOTIFICATION_ID, mBuilder?.build())
@@ -254,3 +307,4 @@ object NotificationManager {
         return V2RayServiceManager.serviceControl?.get()?.getService()
     }
 }
+

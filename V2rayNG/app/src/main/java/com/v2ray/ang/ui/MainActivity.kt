@@ -1,5 +1,8 @@
 package com.v2ray.ang.ui
 
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.net.Uri
@@ -8,6 +11,9 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -28,6 +34,7 @@ import com.v2ray.ang.enums.PermissionType
 import com.v2ray.ang.extension.toast
 import com.v2ray.ang.extension.toastError
 import com.v2ray.ang.handler.AngConfigManager
+import com.v2ray.ang.handler.AutoOutboundBuilder
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsChangeManager
 import com.v2ray.ang.handler.SettingsManager
@@ -49,13 +56,26 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     val mainViewModel: MainViewModel by viewModels()
     private lateinit var groupPagerAdapter: GroupPagerAdapter
     private var tabMediator: TabLayoutMediator? = null
+    private var qtPulseAnimator: AnimatorSet? = null
 
     private val requestVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == RESULT_OK) {
             startV2Ray()
         }
     }
-    private val requestActivityLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+    
+    // Hook for returning from activities (Шаг Конём)
+    private val requestActivityLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { activityResult ->
+        if (activityResult.resultCode == RESULT_OK) {
+            val targetGuid = V2RayServiceManager.resolveQsTileTarget()
+            if (targetGuid != null) {
+                MmkvManager.setSelectServer(targetGuid)
+                updateQtStatus()
+                mainViewModel.reloadServerList()
+            }
+            restartV2Ray()
+        }
+        
         if (SettingsChangeManager.consumeRestartService() && mainViewModel.isRunning.value == true) {
             restartV2Ray()
         }
@@ -69,6 +89,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
         setupToolbar(binding.toolbar, false, getString(R.string.title_server))
+        setupQtToolbar()
 
         // setup viewpager and tablayout
         groupPagerAdapter = GroupPagerAdapter(this, emptyList())
@@ -103,6 +124,94 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         mainViewModel.reloadServerList()
 
         checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) {
+        }
+    }
+
+    private fun setupQtToolbar() {
+        val llQtCenter = binding.toolbar.findViewById<LinearLayout>(R.id.ll_qt_center)
+        val ivQtIcon = binding.toolbar.findViewById<ImageView>(R.id.iv_qt_icon)
+        
+        if (ivQtIcon != null) {
+            // Clean, elegant breathing animation
+            val alpha = ObjectAnimator.ofFloat(ivQtIcon, "alpha", 1.0f, 0.4f).apply {
+                duration = 1000
+                repeatCount = ValueAnimator.INFINITE
+                repeatMode = ValueAnimator.REVERSE
+            }
+            qtPulseAnimator = AnimatorSet().apply { playTogether(alpha) }
+        }
+        
+        llQtCenter?.setOnClickListener {
+            handleQtToggleAction()
+        }
+        llQtCenter?.setOnLongClickListener {
+            requestActivityLauncher.launch(Intent(this, QsTileConfigActivity::class.java))
+            true
+        }
+    }
+
+    private fun updateStatusAnimation(isRunning: Boolean) {
+        val ivQtIcon = binding.toolbar.findViewById<ImageView>(R.id.iv_qt_icon) ?: return
+        if (isRunning) {
+            ivQtIcon.setColorFilter(ContextCompat.getColor(this, R.color.color_fab_active))
+            if (qtPulseAnimator?.isRunning == false) qtPulseAnimator?.start()
+        } else {
+            qtPulseAnimator?.cancel()
+            ivQtIcon.alpha = 1.0f
+            ivQtIcon.clearColorFilter()
+        }
+    }
+
+    private fun handleQtToggleAction() {
+        if (mainViewModel.isRunning.value == true) {
+            applyRunningState(isLoading = true, isRunning = false)
+            V2RayServiceManager.stopVService(this)
+        } else {
+            val targetGuid = V2RayServiceManager.resolveQsTileTarget()
+            if (targetGuid != null) {
+                val current = MmkvManager.getSelectServer()
+                if (current != targetGuid) {
+                    MmkvManager.setSelectServer(targetGuid)
+                    updateQtStatus()
+                    mainViewModel.reloadServerList()
+                }
+            }
+            if (MmkvManager.getSelectServer().isNullOrEmpty()) {
+                toast(R.string.app_tile_first_use)
+                return
+            }
+
+            applyRunningState(isLoading = true, isRunning = false)
+
+            if (SettingsManager.isVpnMode()) {
+                val intent = VpnService.prepare(this)
+                if (intent == null) {
+                    V2RayServiceManager.startVService(this)
+                } else {
+                    requestVpnPermission.launch(intent)
+                }
+            } else {
+                V2RayServiceManager.startVService(this)
+            }
+        }
+    }
+
+    private fun updateQtStatus() {
+        val selected = MmkvManager.getSelectServer()
+        val config = selected?.let { MmkvManager.decodeServerConfig(it) }
+        val tvQtStatus = binding.toolbar.findViewById<TextView>(R.id.tv_qt_status)
+        
+        if (config?.remarks == "Global QS Target") {
+            tvQtStatus?.text = "QT Active (...)"
+            val filter = config.policyGroupFilter
+            lifecycleScope.launch(Dispatchers.IO) {
+                val count = AutoOutboundBuilder.getFilteredRoutingProxies(filter).size
+                withContext(Dispatchers.Main) {
+                    tvQtStatus?.text = "QT Active ($count)"
+                }
+            }
+        } else {
+            tvQtStatus?.text = "Quick Tile"
         }
     }
 
@@ -187,6 +296,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             return
         }
 
+        updateStatusAnimation(isRunning)
+
         if (isRunning) {
             binding.fab.setImageResource(R.drawable.ic_stop_24dp)
             binding.fab.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.color_fab_active))
@@ -204,6 +315,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
     override fun onResume() {
         super.onResume()
+        mainViewModel.subscriptionIdChanged(mainViewModel.subscriptionId)
+        updateQtStatus()
     }
 
     override fun onPause() {
@@ -291,11 +404,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
         R.id.import_manually_hysteria2 -> {
             importManually(EConfigType.HYSTERIA2.value)
-            true
-        }
-
-        R.id.qs_tile_config -> {
-            startActivity(Intent(this, QsTileConfigActivity::class.java))
             true
         }
 

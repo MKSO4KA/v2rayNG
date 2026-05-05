@@ -52,12 +52,35 @@ object SubscriptionUpdater {
                 context = context,
                 subId = sub.guid,
                 shouldRun = sub.subscription.autoUpdate,
+                intervalMinutes = maxOf(AppConfig.SUBSCRIPTION_MIN_INTERVAL_MINUTES, sub.subscription.updateInterval),
+                lastUpdated = sub.subscription.lastUpdated,
                 existingWorkPolicy = existingWorkPolicy
             )
         }
+
+        syncQsTile(context, existingWorkPolicy)
+
         LogUtil.i(
             AppConfig.TAG,
             "SubscriptionUpdater: sync complete forceReschedule=$forceReschedule"
+        )
+    }
+
+    /**
+     * Sync the Quick Tile auto-update task.
+     */
+    fun syncQsTile(context: Context = AngApplication.application, existingWorkPolicy: ExistingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.REPLACE) {
+        val autoUpdate = MmkvManager.decodeSettingsBool(AppConfig.PREF_QS_TILE_AUTO_UPDATE, false)
+        val interval = MmkvManager.decodeSettingsLong(AppConfig.PREF_QS_TILE_AUTO_UPDATE_INTERVAL, 1440L)
+        val lastUpdate = MmkvManager.decodeSettingsLong(AppConfig.PREF_QS_TILE_LAST_UPDATE, 0L)
+        
+        scheduleOne(
+            context = context,
+            subId = AppConfig.QS_TILE_RESERVED_ID,
+            shouldRun = autoUpdate,
+            intervalMinutes = maxOf(AppConfig.SUBSCRIPTION_MIN_INTERVAL_MINUTES, interval),
+            lastUpdated = lastUpdate,
+            existingWorkPolicy = existingWorkPolicy
         )
     }
 
@@ -71,6 +94,8 @@ object SubscriptionUpdater {
             context = context,
             subId = subId,
             shouldRun = subItem.autoUpdate,
+            intervalMinutes = maxOf(AppConfig.SUBSCRIPTION_MIN_INTERVAL_MINUTES, subItem.updateInterval),
+            lastUpdated = subItem.lastUpdated,
             existingWorkPolicy = ExistingPeriodicWorkPolicy.REPLACE
         )
     }
@@ -94,6 +119,8 @@ object SubscriptionUpdater {
         context: Context,
         subId: String,
         shouldRun: Boolean,
+        intervalMinutes: Long,
+        lastUpdated: Long,
         existingWorkPolicy: ExistingPeriodicWorkPolicy
     ) {
         val rw = RemoteWorkManager.getInstance(context)
@@ -103,15 +130,7 @@ object SubscriptionUpdater {
             return
         }
 
-        val subItem = MmkvManager.decodeSubscription(subId) ?: return
-
-        val intervalMinutes = maxOf(
-            AppConfig.SUBSCRIPTION_MIN_INTERVAL_MINUTES,
-            subItem.updateInterval
-        )
-
         // Base initial delay on the last successful update time persisted in subscription.
-        val lastUpdated = subItem.lastUpdated
         val intervalMillis = intervalMinutes * 60 * 1000L
         val now = System.currentTimeMillis()
         val initialDelayMillis = if (lastUpdated <= 0L) {
@@ -173,6 +192,23 @@ object SubscriptionUpdater {
                 return Result.success()
             }
 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                notificationManager.createNotificationChannel(
+                    NotificationChannel(
+                        AppConfig.SUBSCRIPTION_UPDATE_CHANNEL,
+                        AppConfig.SUBSCRIPTION_UPDATE_CHANNEL_NAME,
+                        NotificationManager.IMPORTANCE_MIN
+                    )
+                )
+            }
+
+            if (subId == AppConfig.QS_TILE_RESERVED_ID) {
+                notificationManager.notify(3, notification.setContentTitle("Updating Quick Tile Filters").build())
+                GistRuleProvider.syncQuickTileGists()
+                MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_LAST_UPDATE, System.currentTimeMillis())
+                notificationManager.cancel(3)
+                return Result.success()
+            }
 
             val subItem = MmkvManager.decodeSubscription(subId)
             if (subItem == null) {
@@ -187,16 +223,6 @@ object SubscriptionUpdater {
 
             val sub = SubscriptionCache(subId, subItem)
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                notificationManager.createNotificationChannel(
-                    NotificationChannel(
-                        AppConfig.SUBSCRIPTION_UPDATE_CHANNEL,
-                        AppConfig.SUBSCRIPTION_UPDATE_CHANNEL_NAME,
-                        NotificationManager.IMPORTANCE_MIN
-                    )
-                )
-            }
-
             notificationManager.notify(3, notification.build())
             LogUtil.i(AppConfig.TAG, "SubscriptionUpdater automatic update: ---${sub.subscription.remarks}")
             AngConfigManager.updateConfigViaSub(sub)
@@ -207,3 +233,4 @@ object SubscriptionUpdater {
         }
     }
 }
+

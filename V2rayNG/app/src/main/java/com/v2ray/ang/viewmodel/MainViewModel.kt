@@ -110,6 +110,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         for (guid in serverList) {
             val profile = MmkvManager.decodeServerConfig(guid) ?: continue
+            if (profile.remarks == "Global QS Target") continue
+            
             if (kw.isEmpty()) {
                 serversCache.add(ServersCache(guid, profile))
                 continue

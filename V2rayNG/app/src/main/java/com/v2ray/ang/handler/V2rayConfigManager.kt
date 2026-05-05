@@ -116,33 +116,8 @@ object V2rayConfigManager {
     private fun getV2rayGroupConfig(context: Context, guid: String, config: ProfileItem): ConfigResult {
         val result = ConfigResult(false)
 
-        val serverList = MmkvManager.decodeAllServerList()
-        val configList = serverList
-            .mapNotNull { id -> MmkvManager.decodeServerConfig(id) }
-            .filter { profile ->
-                val subscriptionId = config.policyGroupSubscriptionId
-                if (subscriptionId.isNullOrBlank()) {
-                    true
-                } else {
-                    profile.subscriptionId == subscriptionId
-                }
-            }
-            .filter { profile ->
-                val filter = config.policyGroupFilter
-                if (filter.isNullOrBlank()) {
-                    true
-                } else {
-                    try {
-                        val expanded = AutoOutboundBuilder.expandFlagShorthands(filter)
-                        val searchStr = "[${profile.configType.name}] ${profile.remarks}"
-                        Regex(expanded, RegexOption.IGNORE_CASE).containsMatchIn(searchStr) || searchStr.contains(expanded)
-                    } catch (e: Exception) {
-                        profile.remarks.contains(filter)
-                    }
-                }
-            }
-
-        val v2rayConfig = getV2rayMultipleConfig(context, config, configList) ?: return result
+        val configPairs = AutoOutboundBuilder.getFilteredRoutingProxies(config.policyGroupFilter, config.policyGroupSubscriptionId)
+        val v2rayConfig = getV2rayMultipleConfig(context, config, configPairs) ?: return result
 
         result.status = true
         result.content = JsonUtil.toJsonPretty(v2rayConfig) ?: ""
@@ -195,11 +170,21 @@ object V2rayConfigManager {
         return result
     }
 
-    private fun getV2rayMultipleConfig(context: Context, config: ProfileItem, configList: List<ProfileItem>): V2rayConfig? {
-        val validConfigs = configList.asSequence().filter { it.server.isNotNullEmpty() }
-            .filter { !Utils.isPureIpAddress(it.server!!) || Utils.isValidUrl(it.server!!) }
-            .filter { it.configType != EConfigType.CUSTOM }
-            .filter { it.configType != EConfigType.POLICYGROUP }
+    private fun getOutbound(profileItem: ProfileItem, guid: String): OutboundBean? {
+        if (profileItem.configType == EConfigType.CUSTOM) {
+            val raw = MmkvManager.decodeServerRaw(guid) ?: return null
+            val rawConfig = JsonUtil.fromJson(raw, V2rayConfig::class.java) ?: return null
+            return rawConfig.outbounds.firstOrNull { it.tag == "proxy" } ?: rawConfig.outbounds.firstOrNull()
+        }
+        return convertProfile2Outbound(profileItem)
+    }
+
+    private fun getV2rayMultipleConfig(context: Context, config: ProfileItem, configList: List<Pair<String, ProfileItem>>): V2rayConfig? {
+        val validConfigs = configList.asSequence()
+            .filter { AutoOutboundBuilder.isValidForAutoGroup(it.second) }
+            .filter { 
+                it.second.configType == EConfigType.CUSTOM || (!it.second.server.isNullOrEmpty() && (!Utils.isPureIpAddress(it.second.server!!) || Utils.isValidUrl(it.second.server!!))) 
+            }
             .toList()
 
         if (validConfigs.isEmpty()) {
@@ -215,19 +200,51 @@ object V2rayConfigManager {
 
         v2rayConfig.outbounds.removeAt(0)
         val outboundsList = mutableListOf<OutboundBean>()
+        val extractedRules = mutableListOf<RulesBean>()
         var index = 0
-        for (configItem in validConfigs) {
+        
+        for ((guid, configItem) in validConfigs) {
             index++
-            val outbound = convertProfile2Outbound(configItem) ?: continue
-            val ret = updateOutboundWithGlobalSettings(outbound)
-            if (!ret) continue
-            outbound.tag = "proxy-$index"
+            val outbound = getOutbound(configItem, guid) ?: continue
+            
+            if (configItem.configType != EConfigType.CUSTOM) {
+                val ret = updateOutboundWithGlobalSettings(outbound)
+                if (!ret) continue
+            }
+            
+            val newTag = "proxy-$index"
+            outbound.tag = newTag
             outboundsList.add(outbound)
+
+            // For CUSTOM configs, extract their routing rules and hoist them
+            if (configItem.configType == EConfigType.CUSTOM) {
+                val raw = MmkvManager.decodeServerRaw(guid)
+                if (!raw.isNullOrBlank()) {
+                    try {
+                        val rawConfig = JsonUtil.fromJson(raw, V2rayConfig::class.java)
+                        rawConfig?.routing?.rules?.forEach { rule ->
+                            if (rule.outboundTag == "proxy") {
+                                rule.outboundTag = newTag
+                                extractedRules.add(rule)
+                            } else if (rule.outboundTag == "direct" || rule.outboundTag == "block") {
+                                extractedRules.add(rule)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        LogUtil.e(AppConfig.TAG, "Failed to parse custom rules for $guid", e)
+                    }
+                }
+            }
         }
         outboundsList.addAll(v2rayConfig.outbounds)
         v2rayConfig.outbounds = ArrayList(outboundsList)
 
         getRouting(context, v2rayConfig, config.subscriptionId)
+
+        // Inject hoisted custom rules at the very top (index 0) so they take precedence
+        if (extractedRules.isNotEmpty()) {
+            v2rayConfig.routing.rules.addAll(0, extractedRules)
+        }
 
         getFakeDns(v2rayConfig)
 
@@ -235,10 +252,10 @@ object V2rayConfigManager {
 
         getBalance(v2rayConfig, config)
 
-        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_LOCAL_DNS_ENABLED)) {
+        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_LOCAL_DNS_ENABLED) == true) {
             getCustomLocalDns(v2rayConfig)
         }
-        if (!MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED)) {
+        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED) != true) {
             v2rayConfig.stats = null
             v2rayConfig.policy = null
         }
@@ -425,6 +442,32 @@ object V2rayConfigManager {
                     ?: "AsIs"
 
             injectCustomOutbounds(v2rayConfig)
+
+            // Inject Quick Tile Global Blocklist FIRST
+            val qsBlocklistJson = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_BLOCKLIST_JSON)
+            if (!qsBlocklistJson.isNullOrBlank()) {
+                try {
+                    val patterns = GistRuleProvider.parseBlocklistFromJson(qsBlocklistJson)
+                    if (!patterns.isNullOrEmpty()) {
+                        val domains = mutableListOf<String>()
+                        val ips = mutableListOf<String>()
+                        patterns.forEach { pattern ->
+                            if (pattern.startsWith("geoip:") || Utils.isPureIpAddress(pattern)) {
+                                ips.add(pattern)
+                            } else {
+                                domains.add(pattern)
+                            }
+                        }
+                        v2rayConfig.routing.rules.add(0, RulesBean(
+                            outboundTag = AppConfig.TAG_BLOCKED,
+                            domain = domains.ifEmpty { null },
+                            ip = ips.ifEmpty { null }
+                        ))
+                    }
+                } catch (e: Exception) {
+                    LogUtil.e(AppConfig.TAG, "Failed to inject QT blocklist", e)
+                }
+            }
 
             if (subId.isNotEmpty()) {
                 val subItem = MmkvManager.decodeSubscription(subId)

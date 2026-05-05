@@ -48,7 +48,7 @@ object V2RayServiceManager {
             }
         }
 
-    private fun resolveQsTileTarget(): String? {
+    fun resolveQsTileTarget(): String? {
         val mode = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_MODE, "0")
         val value = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_VAL, "")
         

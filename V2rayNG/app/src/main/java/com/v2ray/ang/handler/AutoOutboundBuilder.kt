@@ -22,6 +22,51 @@ object AutoOutboundBuilder {
         return expanded
     }
 
+    /**
+     * Determines if a profile is eligible to be probed and matched by the balancer.
+     */
+    fun isValidForAutoGroup(profile: ProfileItem): Boolean {
+        val hasServer = profile.configType == EConfigType.CUSTOM || !profile.server.isNullOrEmpty()
+        return hasServer && profile.configType != EConfigType.POLICYGROUP
+    }
+
+    /**
+     * Determines if a profile matches the regex filter.
+     */
+    fun matchProfile(profile: ProfileItem, processedRegex: String, regex: Regex?): Boolean {
+        val searchString = "[${profile.configType.name}] ${profile.remarks}"
+        return regex?.containsMatchIn(searchString) ?: searchString.contains(processedRegex, ignoreCase = true)
+    }
+
+    /**
+     * Centralized logic to get the exact, filtered list of proxy pairs (GUID -> ProfileItem) 
+     * that will be fed into the core balancer. This ensures 100% consistency across the UI, 
+     * Config Generator, and Notification Manager.
+     */
+    fun getFilteredRoutingProxies(filter: String?, targetSubId: String? = null): List<Pair<String, ProfileItem>> {
+        val serverList = MmkvManager.decodeAllServerList()
+        return serverList.mapNotNull {
+            val profile = MmkvManager.decodeServerConfig(it)
+            if (profile != null) Pair(it, profile) else null
+        }
+        .filter { isValidForAutoGroup(it.second) }
+        .filter { 
+            if (it.second.configType == EConfigType.CUSTOM) true
+            else !Utils.isPureIpAddress(it.second.server!!) || Utils.isValidUrl(it.second.server!!) 
+        }
+        .filter { 
+            if (targetSubId.isNullOrBlank()) true else it.second.subscriptionId == targetSubId
+        }
+        .filter { 
+            if (filter.isNullOrBlank()) true
+            else {
+                val expanded = expandFlagShorthands(filter)
+                val regex = try { Regex(expanded, RegexOption.IGNORE_CASE) } catch(e: Exception) { null }
+                matchProfile(it.second, expanded, regex)
+            }
+        }
+    }
+
     fun ensurePolicyGroups(subId: String) {
         if (subId.isBlank()) return
         val subItem = MmkvManager.decodeSubscription(subId) ?: return
@@ -47,9 +92,7 @@ object AutoOutboundBuilder {
         val serverConfigs = serverList.associateWith { MmkvManager.decodeServerConfig(it) }
             .filterValues { it != null } as Map<String, ProfileItem>
 
-        val regularProxies = serverConfigs.filterValues { 
-            it.configType != EConfigType.POLICYGROUP && it.configType != EConfigType.CUSTOM 
-        }
+        val regularProxies = serverConfigs.filterValues { isValidForAutoGroup(it) }
         val existingPolicyGroups = serverConfigs.filterValues { it.configType == EConfigType.POLICYGROUP }
 
         val generatedGuids = mutableListOf<String>()
@@ -59,8 +102,7 @@ object AutoOutboundBuilder {
             val regexPattern = try { Regex(processedRegex, RegexOption.IGNORE_CASE) } catch(e: Exception) { null }
             
             val hasMatch = regularProxies.values.any { config ->
-                val searchString = "[${config.configType.name}] ${config.remarks}"
-                regexPattern?.containsMatchIn(searchString) ?: searchString.contains(processedRegex, ignoreCase = true)
+                matchProfile(config, processedRegex, regexPattern)
             }
 
             if (hasMatch) {

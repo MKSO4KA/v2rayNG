@@ -86,6 +86,13 @@ object AppConfig {
     const val PREF_QS_TILE_GIST_URL = "pref_qs_tile_gist_url"
     const val PREF_QS_TILE_INTERVAL = "pref_qs_tile_interval"
     const val PREF_QS_TILE_TOLERANCE = "pref_qs_tile_tolerance"
+    const val PREF_QS_TILE_BLOCKLIST_URL = "pref_qs_tile_blocklist_url"
+    const val PREF_QS_TILE_BLOCKLIST_JSON = "pref_qs_tile_blocklist_json"
+    const val PREF_QS_TILE_AUTO_UPDATE = "pref_qs_tile_auto_update"
+    const val PREF_QS_TILE_AUTO_UPDATE_INTERVAL = "pref_qs_tile_auto_update_interval"
+    const val PREF_QS_TILE_LAST_UPDATE = "pref_qs_tile_last_update"
+    const val PREF_QS_TILE_RULE_REMARKS = "pref_qs_tile_rule_remarks"
+    const val QS_TILE_RESERVED_ID = "__qs_tile_reserved_id__"
 
     /** Cache keys. */
     const val CACHE_SUBSCRIPTION_ID = "cache_subscription_id"

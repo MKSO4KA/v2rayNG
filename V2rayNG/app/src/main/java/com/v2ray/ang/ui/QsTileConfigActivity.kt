@@ -18,6 +18,7 @@ import com.v2ray.ang.extension.toast
 import com.v2ray.ang.handler.GistRuleProvider
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.AutoOutboundBuilder
+import com.v2ray.ang.handler.SubscriptionUpdater
 import com.v2ray.ang.util.LogUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -29,6 +30,8 @@ class QsTileConfigActivity : BaseActivity() {
     private val allProxies = mutableListOf<ProfileItem>()
     private val allPolicyGroups = mutableListOf<ProfileItem>()
     private var gistRules = listOf<AutoGroupRule>()
+    
+    private lateinit var initialSnapshot: List<String>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,6 +72,7 @@ class QsTileConfigActivity : BaseActivity() {
             binding.etTolerance.addTextChangedListener { updatePreview() }
 
             binding.btnFetchGist.setOnClickListener { fetchGist() }
+            binding.btnFetchBlocklist.setOnClickListener { fetchBlocklist() }
 
             binding.spGistRules.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
@@ -83,9 +87,25 @@ class QsTileConfigActivity : BaseActivity() {
             }
 
             loadCurrentSettings()
+            initialSnapshot = getMmkvSnapshot()
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Error initializing QsTileConfigActivity", e)
         }
+    }
+    
+    private fun getMmkvSnapshot(): List<String> {
+        return listOf(
+            MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_MODE, "0") ?: "0",
+            MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_VAL, "") ?: "",
+            MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_INTERVAL, "3m") ?: "3m",
+            MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_TOLERANCE, "50.0") ?: "50.0",
+            MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_GIST_URL, "") ?: "",
+            MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_BLOCKLIST_URL, "") ?: "",
+            MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_RULE_REMARKS, "") ?: "",
+            MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_BLOCKLIST_JSON, "") ?: "",
+            MmkvManager.decodeSettingsBool(AppConfig.PREF_QS_TILE_AUTO_UPDATE, false).toString(),
+            MmkvManager.decodeSettingsLong(AppConfig.PREF_QS_TILE_AUTO_UPDATE_INTERVAL, 1440L).toString()
+        )
     }
 
     private fun loadCurrentSettings() {
@@ -94,6 +114,9 @@ class QsTileConfigActivity : BaseActivity() {
         val currentInterval = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_INTERVAL, "3m")
         val currentTolerance = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_TOLERANCE, "50.0")
         val currentGistUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_GIST_URL, "")
+        val currentBlocklistUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_BLOCKLIST_URL, "")
+        val autoUpdate = MmkvManager.decodeSettingsBool(AppConfig.PREF_QS_TILE_AUTO_UPDATE, false)
+        val updateInterval = MmkvManager.decodeSettingsLong(AppConfig.PREF_QS_TILE_AUTO_UPDATE_INTERVAL, 1440L)
 
         binding.spMode.setSelection(currentMode)
         if (currentMode == 2) {
@@ -110,12 +133,18 @@ class QsTileConfigActivity : BaseActivity() {
 
         binding.etInterval.setText(currentInterval)
         binding.etTolerance.setText(currentTolerance)
+        binding.etBlocklistGistUrl.setText(currentBlocklistUrl)
+        binding.autoUpdateCheck.isChecked = autoUpdate
+        binding.etUpdateInterval.setText(updateInterval.toString())
     }
 
     private fun updateUIForMode(mode: Int) {
         binding.llPolicyGroup.visibility = if (mode == 2) View.VISIBLE else View.GONE
         binding.llRegex.visibility = if (mode == 3) View.VISIBLE else View.GONE
         binding.llGist.visibility = if (mode == 4) View.VISIBLE else View.GONE
+        binding.llBlocklistGist.visibility = if (mode == 3 || mode == 4) View.VISIBLE else View.GONE
+        binding.llAutoUpdate.visibility = if (mode == 4) View.VISIBLE else View.GONE
+        binding.llAutoUpdateInterval.visibility = if (mode == 4) View.VISIBLE else View.GONE
         binding.llIntervalTolerance.visibility = if (mode == 3 || mode == 4) View.VISIBLE else View.GONE
         binding.cvPreview.visibility = if (mode == 3 || mode == 4) View.VISIBLE else View.GONE
     }
@@ -140,13 +169,48 @@ class QsTileConfigActivity : BaseActivity() {
                     val ruleNames = gistRules.map { it.remarks }
                     binding.spGistRules.adapter = ArrayAdapter(this@QsTileConfigActivity, android.R.layout.simple_spinner_item, ruleNames).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
                     
-                    if (selectRegex != null) {
-                        val pos = gistRules.indexOfFirst { it.regex == selectRegex }
-                        if (pos >= 0) binding.spGistRules.setSelection(pos)
+                    var pos = -1
+                    val selectRemarks = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_RULE_REMARKS, "")
+                    if (!selectRemarks.isNullOrBlank()) {
+                        pos = gistRules.indexOfFirst { it.remarks == selectRemarks }
+                    } else if (selectRegex != null) {
+                        pos = gistRules.indexOfFirst { it.regex == selectRegex }
                     }
+                    
+                    if (pos >= 0) binding.spGistRules.setSelection(pos)
                     toast("Loaded ${rules.size} rules")
                 } else {
                     toast("Failed to load rules from Gist")
+                }
+            }
+        }
+    }
+
+    private fun fetchBlocklist() {
+        val url = binding.etBlocklistGistUrl.text.toString().trim()
+        if (url.isEmpty()) {
+            toast("Please enter a valid Blocklist Gist URL")
+            return
+        }
+        
+        binding.btnFetchBlocklist.isEnabled = false
+        binding.btnFetchBlocklist.text = "Fetching..."
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val json = GistRuleProvider.fetchBlocklistContent(url)
+            withContext(Dispatchers.Main) {
+                binding.btnFetchBlocklist.isEnabled = true
+                binding.btnFetchBlocklist.text = "Fetch"
+                if (!json.isNullOrBlank()) {
+                    val rules = GistRuleProvider.parseBlocklistFromJson(json)
+                    if (rules != null && rules.isNotEmpty()) {
+                        MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_BLOCKLIST_JSON, json)
+                        toast("Loaded ${rules.size} blocklist rules")
+                    } else {
+                        toast("Failed to parse blocklist rules")
+                    }
+                } else {
+                    toast("Failed to fetch blocklist from Gist")
                 }
             }
         }
@@ -167,28 +231,10 @@ class QsTileConfigActivity : BaseActivity() {
         val tol = binding.etTolerance.text.toString().trim().ifEmpty { "50.0" }
         val intTolInfo = " | Int: $interval | Tol: $tol"
 
-        if (regexStr.isEmpty()) {
-            binding.tvMatchedCount.text = "Matched Proxies: ${allProxies.size}$intTolInfo (No filter)"
-            binding.tvMatchedList.text = allProxies.joinToString("\n") { it.remarks }
-            return
-        }
+        val matchedPairs = AutoOutboundBuilder.getFilteredRoutingProxies(regexStr)
 
-        val processedRegex = AutoOutboundBuilder.expandFlagShorthands(regexStr)
-        val regex = try { Regex(processedRegex, RegexOption.IGNORE_CASE) } catch(e: Exception) { null }
-        
-        if (regex == null) {
-            binding.tvMatchedCount.text = "Invalid Regex"
-            binding.tvMatchedList.text = ""
-            return
-        }
-
-        val matched = allProxies.filter { config ->
-            val searchString = "[${config.configType.name}] ${config.remarks}"
-            regex.containsMatchIn(searchString) || searchString.contains(processedRegex, ignoreCase = true)
-        }
-
-        binding.tvMatchedCount.text = "Matched Proxies: ${matched.size}$intTolInfo"
-        binding.tvMatchedList.text = matched.joinToString("\n") { it.remarks }
+        binding.tvMatchedCount.text = "Matched Proxies: ${matchedPairs.size}$intTolInfo"
+        binding.tvMatchedList.text = matchedPairs.joinToString("\n") { it.second.remarks }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -209,7 +255,26 @@ class QsTileConfigActivity : BaseActivity() {
         val mode = binding.spMode.selectedItemPosition
         MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_MODE, mode.toString())
 
+        val autoUpdate = binding.autoUpdateCheck.isChecked
+        val intervalStr = binding.etUpdateInterval.text.toString().trim()
+        val intervalMinutes = intervalStr.toLongOrNull()
+        val finalInterval = if (autoUpdate && intervalMinutes != null && intervalMinutes >= AppConfig.SUBSCRIPTION_MIN_INTERVAL_MINUTES) {
+            intervalMinutes
+        } else if (intervalMinutes != null && intervalMinutes >= AppConfig.SUBSCRIPTION_MIN_INTERVAL_MINUTES) {
+            intervalMinutes
+        } else {
+            1440L
+        }
+        if (autoUpdate && (intervalMinutes == null || intervalMinutes < AppConfig.SUBSCRIPTION_MIN_INTERVAL_MINUTES)) {
+            toast(R.string.toast_invalid_update_interval)
+            return
+        }
+
+        MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_AUTO_UPDATE, autoUpdate)
+        MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_AUTO_UPDATE_INTERVAL, finalInterval)
+
         var targetVal = ""
+        var ruleRemarks = ""
         when (mode) {
             2 -> {
                 val pos = binding.spPolicyGroups.selectedItemPosition
@@ -222,11 +287,19 @@ class QsTileConfigActivity : BaseActivity() {
                 } else {
                     val pos = binding.spGistRules.selectedItemPosition
                     targetVal = if (pos in gistRules.indices) gistRules[pos].regex.orEmpty() else ""
+                    ruleRemarks = if (pos in gistRules.indices) gistRules[pos].remarks.orEmpty() else ""
                     MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_GIST_URL, binding.etGistUrl.text.toString().trim())
+                    MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_RULE_REMARKS, ruleRemarks)
                 }
                 MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_VAL, targetVal)
                 MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_INTERVAL, binding.etInterval.text.toString().trim())
                 MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_TOLERANCE, binding.etTolerance.text.toString().trim())
+
+                val blUrl = binding.etBlocklistGistUrl.text.toString().trim()
+                MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_BLOCKLIST_URL, blUrl)
+                if (blUrl.isEmpty()) {
+                    MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_BLOCKLIST_JSON, "")
+                }
 
                 // Immediately materialize the Global QS Target policy group
                 val allServers = MmkvManager.decodeAllServerList()
@@ -250,6 +323,15 @@ class QsTileConfigActivity : BaseActivity() {
                 MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_VAL, "")
             }
         }
+
+        val finalSnapshot = getMmkvSnapshot()
+        if (initialSnapshot != finalSnapshot) {
+            setResult(RESULT_OK)
+        } else {
+            setResult(RESULT_CANCELED)
+        }
+
+        SubscriptionUpdater.syncQsTile(this)
         toast(R.string.toast_success)
         finish()
     }

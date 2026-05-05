@@ -118,6 +118,75 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/ll_blocklist_gist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Blocklist Gist URL" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <EditText
+                    android:id="@+id/et_blocklist_gist_url"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:inputType="textUri" />
+                <Button
+                    android:id="@+id/btn_fetch_blocklist"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Fetch" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/ll_auto_update"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="horizontal"
+            android:visibility="gone">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1.0"
+                android:text="Enable automatic update" />
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/auto_update_check"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                app:theme="@style/BrandedSwitch" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/ll_auto_update_interval"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Auto Update Interval (Minutes, Min value 15)" />
+            <EditText
+                android:id="@+id/et_update_interval"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:text="1440" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/ll_interval_tolerance"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

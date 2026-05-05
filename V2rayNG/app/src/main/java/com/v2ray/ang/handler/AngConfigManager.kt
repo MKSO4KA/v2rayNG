@@ -438,7 +438,7 @@ object AngConfigManager {
             it.subscription.locale?.takeIf { v -> v.isNotBlank() }?.let { v -> headers["X-Device-Locale"] = sanitizeHeaderValue(applyMimicryMask(v) ?: v) }
             it.subscription.lang?.takeIf { v -> v.isNotBlank() }?.let { v -> headers["Accept-Language"] = sanitizeHeaderValue(applyMimicryMask(v) ?: v) }
 
-            LogUtil.i(AppConfig.TAG, "Subscription Update Headers sent: $headers")
+            LogUtil.d(AppConfig.TAG, "Subscription Update Headers sent: $headers")
 
             // Smart proxy fallback to avoid 15s connection timeouts if core isn't running
             val useProxy = V2RayServiceManager.isRunning()
@@ -469,7 +469,7 @@ object AngConfigManager {
                 return SubscriptionUpdateResult(failureCount = 1)
             }
 
-            LogUtil.i(AppConfig.TAG, "Received subscription config text length: ${configText.length}")
+            LogUtil.d(AppConfig.TAG, "Received subscription config text length: ${configText.length}")
             
             val count = parseConfigViaSub(configText, it.guid, false)
             if (count > 0) {
@@ -506,7 +506,7 @@ object AngConfigManager {
             LogUtil.d(AppConfig.TAG, "Failed to parse raw batch config, trying custom config...")
             count = parseCustomConfigServer(server, subid, append)
         }
-        LogUtil.i(AppConfig.TAG, "parseConfigViaSub resulting config count: $count")
+        LogUtil.d(AppConfig.TAG, "parseConfigViaSub resulting config count: $count")
         return count
     }
 

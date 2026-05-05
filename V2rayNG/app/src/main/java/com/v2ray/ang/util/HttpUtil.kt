@@ -195,7 +195,7 @@ object HttpUtil {
                 .header("Connection", "close")
 
             var hasUserAgent = false
-            LogUtil.i(AppConfig.TAG, "--- HTTP Request to: $currentUrl ---")
+            LogUtil.d(AppConfig.TAG, "--- HTTP Request to: $currentUrl ---")
             headers.forEach { (key, value) ->
                 var finalValue = value
                 // OkHttp does not natively support brotli ('br') decompression without extra interceptors.
@@ -210,25 +210,25 @@ object HttpUtil {
                 
                 if (key.equals("User-Agent", ignoreCase = true)) hasUserAgent = true
                 requestBuilder.header(key, finalValue)
-                LogUtil.i(AppConfig.TAG, "Request Header -> $key: $finalValue")
+                LogUtil.d(AppConfig.TAG, "Request Header -> $key: $finalValue")
             }
             if (!hasUserAgent) {
                 val defaultUa = "v2rayNG/${BuildConfig.VERSION_NAME}"
                 requestBuilder.header("User-Agent", defaultUa)
-                LogUtil.i(AppConfig.TAG, "Request Header (Default) -> User-Agent: $defaultUa")
+                LogUtil.d(AppConfig.TAG, "Request Header (Default) -> User-Agent: $defaultUa")
             }
 
             if (httpPort != 0 && !proxyUsername.isNullOrBlank() && !proxyPassword.isNullOrBlank()) {
                 requestBuilder.header("Proxy-Authorization", Credentials.basic(proxyUsername, proxyPassword))
-                LogUtil.i(AppConfig.TAG, "Request Header -> Proxy-Authorization: [HIDDEN]")
+                LogUtil.d(AppConfig.TAG, "Request Header -> Proxy-Authorization: [HIDDEN]")
             }
 
             try {
                 client.newCall(requestBuilder.build()).execute().use { response ->
-                    LogUtil.i(AppConfig.TAG, "--- HTTP Response ---")
-                    LogUtil.i(AppConfig.TAG, "Code: ${response.code} Message: ${response.message}")
+                    LogUtil.d(AppConfig.TAG, "--- HTTP Response ---")
+                    LogUtil.d(AppConfig.TAG, "Code: ${response.code} Message: ${response.message}")
                     response.headers.forEach { (name, value) ->
-                        LogUtil.i(AppConfig.TAG, "Response Header -> $name: $value")
+                        LogUtil.d(AppConfig.TAG, "Response Header -> $name: $value")
                     }
                     
                     when {
@@ -263,7 +263,7 @@ object HttpUtil {
                                 ""
                             }
 
-                            LogUtil.i(AppConfig.TAG, "Parsed Body length: ${bodyStr.length}.")
+                            LogUtil.d(AppConfig.TAG, "Parsed Body length: ${bodyStr.length}.")
                             if (bodyStr.length > 200) {
                                 LogUtil.d(AppConfig.TAG, "Body Preview: ${bodyStr.take(200).replace("\n", "\\n")}")
                             } else {

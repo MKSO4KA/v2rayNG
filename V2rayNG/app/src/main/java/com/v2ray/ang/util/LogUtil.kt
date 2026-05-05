@@ -2,6 +2,7 @@ package com.v2ray.ang.util
 
 import android.util.Log
 import com.v2ray.ang.AppConfig
+import com.v2ray.ang.BuildConfig
 import com.v2ray.ang.handler.MmkvManager
 import java.util.Locale
 
@@ -49,6 +50,7 @@ object LogUtil {
     }
 
     private fun isEnabled(priority: Int): Boolean {
+        if (priority < Log.INFO && !BuildConfig.DEBUG) return false
         return priority >= minPriority()
     }
 

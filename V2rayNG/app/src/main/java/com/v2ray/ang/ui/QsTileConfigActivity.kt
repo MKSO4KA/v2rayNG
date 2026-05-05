@@ -6,17 +6,11 @@ import android.view.MenuItem
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.Spinner
-import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
-import androidx.cardview.widget.CardView
 import androidx.core.widget.addTextChangedListener
 import androidx.lifecycle.lifecycleScope
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
+import com.v2ray.ang.databinding.ActivityQsTileConfigBinding
 import com.v2ray.ang.dto.AutoGroupRule
 import com.v2ray.ang.dto.ProfileItem
 import com.v2ray.ang.enums.EConfigType
@@ -31,70 +25,38 @@ import kotlinx.coroutines.withContext
 
 class QsTileConfigActivity : BaseActivity() {
 
-    private var spMode: Spinner? = null
-    private var llPolicyGroup: LinearLayout? = null
-    private var spPolicyGroups: Spinner? = null
-    private var llRegex: LinearLayout? = null
-    private var etRegex: EditText? = null
-    private var llGist: LinearLayout? = null
-    private var etGistUrl: EditText? = null
-    private var btnFetchGist: Button? = null
-    private var spGistRules: Spinner? = null
-    private var llIntervalTolerance: LinearLayout? = null
-    private var etInterval: EditText? = null
-    private var etTolerance: EditText? = null
-    private var cvPreview: CardView? = null
-    private var tvMatchedCount: TextView? = null
-    private var tvMatchedList: TextView? = null
-
+    private lateinit var binding: ActivityQsTileConfigBinding
     private val allProxies = mutableListOf<ProfileItem>()
     private val allPolicyGroups = mutableListOf<ProfileItem>()
     private var gistRules = listOf<AutoGroupRule>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_qs_tile_config)
-        setupToolbar(findViewById(R.id.toolbar), showHomeAsUp = true, title = getString(R.string.qs_tile_config_title))
+        binding = ActivityQsTileConfigBinding.inflate(layoutInflater)
+        setContentViewWithToolbar(binding.root, showHomeAsUp = true, title = getString(R.string.qs_tile_config_title))
 
         try {
-            spMode = findViewById(R.id.sp_mode)
-            llPolicyGroup = findViewById(R.id.ll_policy_group)
-            spPolicyGroups = findViewById(R.id.sp_policy_groups)
-            llRegex = findViewById(R.id.ll_regex)
-            etRegex = findViewById(R.id.et_regex)
-            llGist = findViewById(R.id.ll_gist)
-            etGistUrl = findViewById(R.id.et_gist_url)
-            btnFetchGist = findViewById(R.id.btn_fetch_gist)
-            spGistRules = findViewById(R.id.sp_gist_rules)
-            llIntervalTolerance = findViewById(R.id.ll_interval_tolerance)
-            etInterval = findViewById(R.id.et_interval)
-            etTolerance = findViewById(R.id.et_tolerance)
-            cvPreview = findViewById(R.id.cv_preview)
-            tvMatchedCount = findViewById(R.id.tv_matched_count)
-            tvMatchedList = findViewById(R.id.tv_matched_list)
-
             val serverList = MmkvManager.decodeAllServerList()
-            LogUtil.i(AppConfig.TAG, "QsTileConfig: Raw serverList size from MMKV = ${serverList.size}")
+            LogUtil.d(AppConfig.TAG, "QsTileConfig: Raw serverList size = ${serverList.size}")
 
             serverList.forEach { guid ->
                 MmkvManager.decodeServerConfig(guid)?.let { config ->
                     if (config.configType == EConfigType.POLICYGROUP) {
                         allPolicyGroups.add(config)
                     } else {
-                        // Keep all types of proxies including CUSTOM so they can be matched
                         allProxies.add(config)
                     }
                 }
             }
-            LogUtil.i(AppConfig.TAG, "QsTileConfig: Loaded ${allProxies.size} proxies and ${allPolicyGroups.size} policy groups.")
+            LogUtil.d(AppConfig.TAG, "QsTileConfig: Loaded ${allProxies.size} proxies and ${allPolicyGroups.size} policy groups.")
 
             val modes = listOf("Last Selected (Default)", "Best Ping (Global)", "Specific Policy Group", "Global Regex Match", "Gist-Based Global Targeting")
-            spMode?.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, modes).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            binding.spMode.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, modes).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
 
             val policyNames = allPolicyGroups.map { it.remarks }.ifEmpty { listOf("No Policy Groups Found") }
-            spPolicyGroups?.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, policyNames).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            binding.spPolicyGroups.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, policyNames).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
 
-            spMode?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            binding.spMode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                     updateUIForMode(position)
                     updatePreview()
@@ -102,18 +64,18 @@ class QsTileConfigActivity : BaseActivity() {
                 override fun onNothingSelected(parent: AdapterView<*>?) {}
             }
 
-            etRegex?.addTextChangedListener { updatePreview() }
-            etInterval?.addTextChangedListener { updatePreview() }
-            etTolerance?.addTextChangedListener { updatePreview() }
+            binding.etRegex.addTextChangedListener { updatePreview() }
+            binding.etInterval.addTextChangedListener { updatePreview() }
+            binding.etTolerance.addTextChangedListener { updatePreview() }
 
-            btnFetchGist?.setOnClickListener { fetchGist() }
+            binding.btnFetchGist.setOnClickListener { fetchGist() }
 
-            spGistRules?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            binding.spGistRules.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                    if (position >= 0 && position < gistRules.size) {
+                    if (position in gistRules.indices) {
                         val rule = gistRules[position]
-                        etInterval?.setText(rule.interval ?: "3m")
-                        etTolerance?.setText(rule.tolerance?.toString() ?: "50.0")
+                        binding.etInterval.setText(rule.interval ?: "3m")
+                        binding.etTolerance.setText(rule.tolerance?.toString() ?: "50.0")
                         updatePreview()
                     }
                 }
@@ -128,59 +90,59 @@ class QsTileConfigActivity : BaseActivity() {
 
     private fun loadCurrentSettings() {
         val currentMode = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_MODE, "0")?.toIntOrNull() ?: 0
-        val currentVal = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_VAL, "")
+        val currentVal = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_VAL, "") ?: ""
         val currentInterval = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_INTERVAL, "3m")
         val currentTolerance = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_TOLERANCE, "50.0")
         val currentGistUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_GIST_URL, "")
 
-        spMode?.setSelection(currentMode)
+        binding.spMode.setSelection(currentMode)
         if (currentMode == 2) {
             val pos = allPolicyGroups.indexOfFirst { it.remarks == currentVal }
-            if (pos >= 0) spPolicyGroups?.setSelection(pos)
+            if (pos >= 0) binding.spPolicyGroups.setSelection(pos)
         } else if (currentMode == 3) {
-            etRegex?.setText(currentVal)
+            binding.etRegex.setText(currentVal)
         } else if (currentMode == 4) {
-            etGistUrl?.setText(currentGistUrl)
+            binding.etGistUrl.setText(currentGistUrl)
             if (!currentGistUrl.isNullOrBlank()) {
                 fetchGist(currentVal)
             }
         }
 
-        etInterval?.setText(currentInterval)
-        etTolerance?.setText(currentTolerance)
+        binding.etInterval.setText(currentInterval)
+        binding.etTolerance.setText(currentTolerance)
     }
 
     private fun updateUIForMode(mode: Int) {
-        llPolicyGroup?.visibility = if (mode == 2) View.VISIBLE else View.GONE
-        llRegex?.visibility = if (mode == 3) View.VISIBLE else View.GONE
-        llGist?.visibility = if (mode == 4) View.VISIBLE else View.GONE
-        llIntervalTolerance?.visibility = if (mode == 3 || mode == 4) View.VISIBLE else View.GONE
-        cvPreview?.visibility = if (mode == 3 || mode == 4) View.VISIBLE else View.GONE
+        binding.llPolicyGroup.visibility = if (mode == 2) View.VISIBLE else View.GONE
+        binding.llRegex.visibility = if (mode == 3) View.VISIBLE else View.GONE
+        binding.llGist.visibility = if (mode == 4) View.VISIBLE else View.GONE
+        binding.llIntervalTolerance.visibility = if (mode == 3 || mode == 4) View.VISIBLE else View.GONE
+        binding.cvPreview.visibility = if (mode == 3 || mode == 4) View.VISIBLE else View.GONE
     }
 
     private fun fetchGist(selectRegex: String? = null) {
-        val url = etGistUrl?.text.toString().trim()
+        val url = binding.etGistUrl.text.toString().trim()
         if (url.isEmpty()) {
             toast("Please enter a valid Gist URL")
             return
         }
         
-        btnFetchGist?.isEnabled = false
-        btnFetchGist?.text = "Fetching..."
+        binding.btnFetchGist.isEnabled = false
+        binding.btnFetchGist.text = "Fetching..."
 
         lifecycleScope.launch(Dispatchers.IO) {
             val (rules, _) = GistRuleProvider.fetchAndParseRules(url)
             withContext(Dispatchers.Main) {
-                btnFetchGist?.isEnabled = true
-                btnFetchGist?.text = "Fetch"
+                binding.btnFetchGist.isEnabled = true
+                binding.btnFetchGist.text = "Fetch"
                 if (rules != null && rules.isNotEmpty()) {
                     gistRules = rules
                     val ruleNames = gistRules.map { it.remarks }
-                    spGistRules?.adapter = ArrayAdapter(this@QsTileConfigActivity, android.R.layout.simple_spinner_item, ruleNames).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+                    binding.spGistRules.adapter = ArrayAdapter(this@QsTileConfigActivity, android.R.layout.simple_spinner_item, ruleNames).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
                     
                     if (selectRegex != null) {
                         val pos = gistRules.indexOfFirst { it.regex == selectRegex }
-                        if (pos >= 0) spGistRules?.setSelection(pos)
+                        if (pos >= 0) binding.spGistRules.setSelection(pos)
                     }
                     toast("Loaded ${rules.size} rules")
                 } else {
@@ -191,23 +153,23 @@ class QsTileConfigActivity : BaseActivity() {
     }
 
     private fun updatePreview() {
-        val mode = spMode?.selectedItemPosition ?: return
+        val mode = binding.spMode.selectedItemPosition
         if (mode != 3 && mode != 4) return
 
         val regexStr = if (mode == 3) {
-            etRegex?.text.toString().trim()
+            binding.etRegex.text.toString().trim()
         } else {
-            val pos = spGistRules?.selectedItemPosition ?: -1
-            if (pos >= 0 && pos < gistRules.size) gistRules[pos].regex else ""
+            val pos = binding.spGistRules.selectedItemPosition
+            if (pos in gistRules.indices) gistRules[pos].regex.orEmpty() else ""
         }
 
-        val interval = etInterval?.text.toString().trim().ifEmpty { "3m" }
-        val tol = etTolerance?.text.toString().trim().ifEmpty { "50.0" }
+        val interval = binding.etInterval.text.toString().trim().ifEmpty { "3m" }
+        val tol = binding.etTolerance.text.toString().trim().ifEmpty { "50.0" }
         val intTolInfo = " | Int: $interval | Tol: $tol"
 
-        if (regexStr.isNullOrEmpty()) {
-            tvMatchedCount?.text = "Matched Proxies: ${allProxies.size}$intTolInfo (No filter)"
-            tvMatchedList?.text = allProxies.joinToString("\n") { it.remarks }
+        if (regexStr.isEmpty()) {
+            binding.tvMatchedCount.text = "Matched Proxies: ${allProxies.size}$intTolInfo (No filter)"
+            binding.tvMatchedList.text = allProxies.joinToString("\n") { it.remarks }
             return
         }
 
@@ -215,8 +177,8 @@ class QsTileConfigActivity : BaseActivity() {
         val regex = try { Regex(processedRegex, RegexOption.IGNORE_CASE) } catch(e: Exception) { null }
         
         if (regex == null) {
-            tvMatchedCount?.text = "Invalid Regex"
-            tvMatchedList?.text = ""
+            binding.tvMatchedCount.text = "Invalid Regex"
+            binding.tvMatchedList.text = ""
             return
         }
 
@@ -225,8 +187,8 @@ class QsTileConfigActivity : BaseActivity() {
             regex.containsMatchIn(searchString) || searchString.contains(processedRegex, ignoreCase = true)
         }
 
-        tvMatchedCount?.text = "Matched Proxies: ${matched.size}$intTolInfo"
-        tvMatchedList?.text = matched.joinToString("\n") { it.remarks }
+        binding.tvMatchedCount.text = "Matched Proxies: ${matched.size}$intTolInfo"
+        binding.tvMatchedList.text = matched.joinToString("\n") { it.remarks }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -244,27 +206,45 @@ class QsTileConfigActivity : BaseActivity() {
     }
 
     private fun saveConfig() {
-        val mode = spMode?.selectedItemPosition ?: 0
+        val mode = binding.spMode.selectedItemPosition
         MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_MODE, mode.toString())
 
+        var targetVal = ""
         when (mode) {
             2 -> {
-                val pos = spPolicyGroups?.selectedItemPosition ?: -1
-                val valStr = if (pos >= 0 && pos < allPolicyGroups.size) allPolicyGroups[pos].remarks else ""
-                MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_VAL, valStr)
+                val pos = binding.spPolicyGroups.selectedItemPosition
+                targetVal = if (pos in allPolicyGroups.indices) allPolicyGroups[pos].remarks else ""
+                MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_VAL, targetVal)
             }
-            3 -> {
-                MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_VAL, etRegex?.text.toString().trim())
-                MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_INTERVAL, etInterval?.text.toString().trim())
-                MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_TOLERANCE, etTolerance?.text.toString().trim())
-            }
-            4 -> {
-                val pos = spGistRules?.selectedItemPosition ?: -1
-                val valStr = if (pos >= 0 && pos < gistRules.size) gistRules[pos].regex else ""
-                MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_VAL, valStr)
-                MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_GIST_URL, etGistUrl?.text.toString().trim())
-                MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_INTERVAL, etInterval?.text.toString().trim())
-                MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_TOLERANCE, etTolerance?.text.toString().trim())
+            3, 4 -> {
+                if (mode == 3) {
+                    targetVal = binding.etRegex.text.toString().trim()
+                } else {
+                    val pos = binding.spGistRules.selectedItemPosition
+                    targetVal = if (pos in gistRules.indices) gistRules[pos].regex.orEmpty() else ""
+                    MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_GIST_URL, binding.etGistUrl.text.toString().trim())
+                }
+                MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_VAL, targetVal)
+                MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_INTERVAL, binding.etInterval.text.toString().trim())
+                MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_TOLERANCE, binding.etTolerance.text.toString().trim())
+
+                // Immediately materialize the Global QS Target policy group
+                val allServers = MmkvManager.decodeAllServerList()
+                val globalGroupGuid = allServers.find { guid ->
+                    MmkvManager.decodeServerConfig(guid)?.remarks == "Global QS Target"
+                } ?: ""
+                
+                val config = MmkvManager.decodeServerConfig(globalGroupGuid) ?: ProfileItem.create(EConfigType.POLICYGROUP)
+                config.remarks = "Global QS Target"
+                config.policyGroupType = "0" // Least Ping is best for a quick tile regex match
+                config.policyGroupSubscriptionId = "" // Empty means evaluate across ALL subscriptions
+                config.policyGroupFilter = targetVal
+                config.policyGroupInterval = binding.etInterval.text.toString().trim().ifEmpty { "3m" }
+                config.policyGroupTolerance = binding.etTolerance.text.toString().trim().toDoubleOrNull() ?: 50.0
+                config.description = "Global Quick Tile Auto-Group"
+                config.subscriptionId = "" // Ensure it does not belong to a sub that could be deleted
+                
+                MmkvManager.encodeServerConfig(globalGroupGuid, config)
             }
             else -> {
                 MmkvManager.encodeSettings(AppConfig.PREF_QS_TILE_VAL, "")

@@ -21,6 +21,7 @@ endif
 export ANDROID_HOME  := $(shell cygpath -u "$(RAW_ANDROID_HOME)")
 export NDK_HOME      := $(shell cygpath -u "$(RAW_NDK_HOME)")
 export JAVA_HOME_BIN := $(shell cygpath -u "$(RAW_JAVA_BIN)")
+export JAVA_HOME     := $(shell dirname "$(JAVA_HOME_BIN)")
 export GOPATH_MSYS   := $(shell cygpath -u "$(RAW_GOPATH)")
 
 # --- RF CONNECTIVITY & AUTO TOOLCHAIN ---
@@ -113,13 +114,16 @@ all: check tunnel core deploy
 help:
 	@echo "=== V2rayNG MSYS2 Build System ==="
 	@echo "Targets:"
-	@echo "  make all      - Build Tunnel, Go Core, and Deploy to Android project "
-	@echo "  make check    - Verify environment paths and toolchain configuration"
-	@echo "  make tunnel   - Compile hev-socks5-tunnel (C++) using NDK"
-	@echo "  make assets   - Download and prepare GeoIP/GeoSite assets"
-	@echo "  make core     - Compile Go Core (Xray Lite) into AAR"
-	@echo "  make deploy   - Copy build artifacts to app/libs"
-	@echo "  make clean    - Remove build artifacts"
+	@echo "  make all       - Build Tunnel, Go Core, and Deploy to Android project "
+	@echo "  make check     - Verify environment paths and toolchain configuration"
+	@echo "  make tunnel    - Compile hev-socks5-tunnel (C++) using NDK"
+	@echo "  make assets    - Download and prepare GeoIP/GeoSite assets"
+	@echo "  make core      - Compile Go Core (Xray Lite) into AAR"
+	@echo "  make deploy    - Copy build artifacts to app/libs"
+	@echo "  make clean     - Remove build artifacts"
+	@echo "  make debug     - Interactive pipeline + build Android Debug APK [FLAVOR=fdroid|playstore]"
+	@echo "  make release   - Interactive pipeline + build Android Release APK [FLAVOR=fdroid|playstore]"
+	@echo "  make build_all - Fully automated pipeline (alias for 'make all' + 'make release')"
 
 check:
 	@echo "=== Environment Check ==="
@@ -165,7 +169,7 @@ tunnel:
 					cp -f "$$target_path" "$$file"; \
 				fi; \
 			fi; \
-		done; \
+			done; \
 		echo "  -> Retrying build with hotfix applied..."; \
 		$(TUNNEL_BUILD_CMD); \
 		BUILD_EXIT=$$?; \
@@ -229,3 +233,48 @@ clean:
 		rm -rf "$(APP_LIBS_DIR)"/*; \
 	fi
 	@echo "Clean completed."
+
+# --- ANDROID APP BUILD TASKS ---
+# Usage: make debug FLAVOR=playstore
+#        make release FLAVOR=fdroid (default)
+
+FLAVOR ?= playstore
+ifeq ($(FLAVOR),playstore)
+    GRADLE_FLAVOR := Playstore
+else
+    GRADLE_FLAVOR := Fdroid
+endif
+
+.PHONY: interactive_prep debug release build_all
+
+interactive_prep: check
+	@printf "\nRebuild Tunnel? [y/N]: "; read ans_t; \
+	if [ "$$ans_t" = "y" ] || [ "$$ans_t" = "Y" ]; then $(MAKE) tunnel; fi
+	@printf "Rebuild Core? [y/N]: "; read ans_c; \
+	if [ "$$ans_c" = "y" ] || [ "$$ans_c" = "Y" ]; then $(MAKE) core; fi
+	@$(MAKE) deploy
+
+debug: interactive_prep
+	@echo "[5/5] Building Android App (Debug, Flavor: $(GRADLE_FLAVOR))..."
+	@cd "$(PROJECT_ROOT)/V2rayNG" && chmod +x gradlew && ./gradlew assemble$(GRADLE_FLAVOR)Debug
+	@echo "=== DEBUG BUILD COMPLETE ==="
+	@APK_DIR="$(PROJECT_ROOT)/V2rayNG/app/build/outputs/apk/$(FLAVOR)/debug"; \
+	echo "APK can be found in $$APK_DIR"; \
+	explorer.exe $$(cygpath -w "$$APK_DIR") 2>/dev/null || true
+
+release: interactive_prep
+	@echo "[5/5] Building Android App (Release, Flavor: $(GRADLE_FLAVOR))..."
+	@cd "$(PROJECT_ROOT)/V2rayNG" && chmod +x gradlew && ./gradlew assemble$(GRADLE_FLAVOR)Release
+	@echo "=== RELEASE BUILD COMPLETE ==="
+	@APK_DIR="$(PROJECT_ROOT)/V2rayNG/app/build/outputs/apk/$(FLAVOR)/release"; \
+	echo "APK can be found in $$APK_DIR"; \
+	explorer.exe $$(cygpath -w "$$APK_DIR") 2>/dev/null || true
+
+build_all: all
+	@echo "[5/5] Building Android App (Release, Flavor: $(GRADLE_FLAVOR))..."
+	@cd "$(PROJECT_ROOT)/V2rayNG" && chmod +x gradlew && ./gradlew assemble$(GRADLE_FLAVOR)Release
+	@echo "=== FULL BUILD COMPLETE ==="
+	@APK_DIR="$(PROJECT_ROOT)/V2rayNG/app/build/outputs/apk/$(FLAVOR)/release"; \
+	echo "APK can be found in $$APK_DIR"; \
+	explorer.exe $$(cygpath -w "$$APK_DIR") 2>/dev/null || true
+

@@ -16,12 +16,9 @@ import com.v2ray.ang.dto.SubscriptionItem
 import com.v2ray.ang.dto.WebDavConfig
 import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.util.JsonUtil
-import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
 
 object MmkvManager {
-
-    //region private
 
     private const val ID_MAIN = "MAIN"
     private const val ID_PROFILE_FULL_CONFIG = "PROFILE_FULL_CONFIG"
@@ -44,10 +41,6 @@ object MmkvManager {
     private val subStorage by lazy { MMKV.mmkvWithID(ID_SUB, MMKV.MULTI_PROCESS_MODE) }
     private val assetStorage by lazy { MMKV.mmkvWithID(ID_ASSET, MMKV.MULTI_PROCESS_MODE) }
     private val settingsStorage by lazy { MMKV.mmkvWithID(ID_SETTING, MMKV.MULTI_PROCESS_MODE) }
-
-    //endregion
-
-    //region Server
 
     fun readLegacyServerList(): String? {
         return mainStorage.decodeString(KEY_ANG_CONFIGS)
@@ -79,25 +72,21 @@ object MmkvManager {
     }
 
     fun decodeAllServerList(): MutableList<String> {
-        initSubsList() // Critical fix: Ensure sub IDs are synced before reading them
+        initSubsList()
         val allServers = mutableListOf<String>()
         val subsList = decodeSubsList()
-        LogUtil.d(AppConfig.TAG, "decodeAllServerList: Processing ${subsList.size} sub buckets")
         
         if (!subsList.contains(DEFAULT_SUBSCRIPTION_ID)) {
             val defServers = decodeServerList(DEFAULT_SUBSCRIPTION_ID)
             allServers.addAll(defServers)
-            LogUtil.d(AppConfig.TAG, "decodeAllServerList: Added ${defServers.size} servers from DEFAULT")
         }
         
         subsList.forEach { guid ->
             val subServers = decodeServerList(guid)
             allServers.addAll(subServers)
-            LogUtil.d(AppConfig.TAG, "decodeAllServerList: Added ${subServers.size} servers from sub $guid")
         }
         
         val distinct = allServers.distinct().toMutableList()
-        LogUtil.i(AppConfig.TAG, "decodeAllServerList: Total distinct servers resolved = ${distinct.size}")
         return distinct
     }
 
@@ -157,7 +146,7 @@ object MmkvManager {
         serverList.forEach { guid ->
             val config = decodeServerConfig(guid)
             if (config != null && config.configType == EConfigType.POLICYGROUP) {
-                // Keep policy groups
+                
             } else {
                 if (getSelectServer() == guid) {
                     mainStorage.remove(KEY_SELECTED_SERVER)
@@ -238,10 +227,6 @@ object MmkvManager {
         return serverRawStorage.decodeString(guid)
     }
 
-    //endregion
-
-    //region Subscriptions
-
     private fun getSubscriptionId(subscriptionId: String?): String {
         return subscriptionId?.ifEmpty { DEFAULT_SUBSCRIPTION_ID } ?: DEFAULT_SUBSCRIPTION_ID
     }
@@ -308,10 +293,6 @@ object MmkvManager {
         }
     }
 
-    //endregion
-
-    //region Asset
-
     fun decodeAssetUrls(): List<AssetUrlCache> {
         val assetUrlItems = mutableListOf<AssetUrlCache>()
         assetStorage.allKeys()?.forEach { key ->
@@ -338,10 +319,6 @@ object MmkvManager {
         return JsonUtil.fromJson(json, AssetUrlItem::class.java)
     }
 
-    //endregion
-
-    //region Routing
-
     fun decodeRoutingRulesets(): MutableList<RulesetItem>? {
         val ruleset = settingsStorage.decodeString(PREF_ROUTING_RULESET)
         if (ruleset.isNullOrEmpty()) return null
@@ -355,9 +332,6 @@ object MmkvManager {
             encodeSettings(PREF_ROUTING_RULESET, JsonUtil.toJson(rulesetList))
     }
 
-    //endregion
-
-    //region settings
     fun encodeSettings(key: String, value: String?): Boolean {
         return settingsStorage.encode(key, value)
     }
@@ -409,10 +383,6 @@ object MmkvManager {
         return decodeSettingsBool(PREF_IS_BOOTED, false)
     }
 
-    //endregion
-
-    //region WebDAV
-
     fun encodeWebDavConfig(config: WebDavConfig): Boolean {
         return mainStorage.encode(KEY_WEBDAV_CONFIG, JsonUtil.toJson(config))
     }
@@ -421,10 +391,6 @@ object MmkvManager {
         val json = mainStorage.decodeString(KEY_WEBDAV_CONFIG) ?: return null
         return JsonUtil.fromJson(json, WebDavConfig::class.java)
     }
-
-    //endregion
-
-    //region Mimicry Presets
 
     fun encodeMimicryPresets(presets: List<MimicryPreset>): Boolean {
         return mainStorage.encode(KEY_MIMICRY_PRESETS, JsonUtil.toJson(presets))
@@ -435,7 +401,4 @@ object MmkvManager {
         if (json.isNullOrBlank()) return mutableListOf()
         return JsonUtil.fromJson(json, Array<MimicryPreset>::class.java)?.toMutableList() ?: mutableListOf()
     }
-
-    //endregion
 }
-

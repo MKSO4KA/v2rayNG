@@ -34,8 +34,8 @@ import com.v2ray.ang.enums.PermissionType
 import com.v2ray.ang.extension.toast
 import com.v2ray.ang.extension.toastError
 import com.v2ray.ang.handler.AngConfigManager
-import com.v2ray.ang.handler.AutoOutboundBuilder
 import com.v2ray.ang.handler.MmkvManager
+import com.v2ray.ang.handler.QuickTileManager
 import com.v2ray.ang.handler.SettingsChangeManager
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.handler.SubscriptionUpdater
@@ -64,10 +64,9 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         }
     }
     
-    // Hook for returning from activities (Шаг Конём)
     private val requestActivityLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { activityResult ->
         if (activityResult.resultCode == RESULT_OK) {
-            val targetGuid = V2RayServiceManager.resolveQsTileTarget()
+            val targetGuid = QuickTileManager.resolveQsTileTarget()
             if (targetGuid != null) {
                 MmkvManager.setSelectServer(targetGuid)
                 updateQtStatus()
@@ -84,19 +83,16 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         }
     }
 
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
         setupToolbar(binding.toolbar, false, getString(R.string.title_server))
         setupQtToolbar()
 
-        // setup viewpager and tablayout
         groupPagerAdapter = GroupPagerAdapter(this, emptyList())
         binding.viewPager.adapter = groupPagerAdapter
         binding.viewPager.isUserInputEnabled = true
 
-        // setup navigation drawer
         val toggle = ActionBarDrawerToggle(
             this, binding.drawerLayout, binding.toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close
         )
@@ -132,7 +128,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         val ivQtIcon = binding.toolbar.findViewById<ImageView>(R.id.iv_qt_icon)
         
         if (ivQtIcon != null) {
-            // Clean, elegant breathing animation
             val alpha = ObjectAnimator.ofFloat(ivQtIcon, "alpha", 1.0f, 0.4f).apply {
                 duration = 1000
                 repeatCount = ValueAnimator.INFINITE
@@ -167,7 +162,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             applyRunningState(isLoading = true, isRunning = false)
             V2RayServiceManager.stopVService(this)
         } else {
-            val targetGuid = V2RayServiceManager.resolveQsTileTarget()
+            val targetGuid = QuickTileManager.resolveQsTileTarget()
             if (targetGuid != null) {
                 val current = MmkvManager.getSelectServer()
                 if (current != targetGuid) {
@@ -200,18 +195,11 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         val selected = MmkvManager.getSelectServer()
         val config = selected?.let { MmkvManager.decodeServerConfig(it) }
         val tvQtStatus = binding.toolbar.findViewById<TextView>(R.id.tv_qt_status)
-        
-        if (config?.remarks == "Global QS Target") {
-            tvQtStatus?.text = "QT Active (...)"
-            val filter = config.policyGroupFilter
-            lifecycleScope.launch(Dispatchers.IO) {
-                val count = AutoOutboundBuilder.getFilteredRoutingProxies(filter).size
-                withContext(Dispatchers.Main) {
-                    tvQtStatus?.text = "QT Active ($count)"
-                }
+        lifecycleScope.launch(Dispatchers.IO) {
+            val statusText = QuickTileManager.getQtStatusTextAsync(config)
+            withContext(Dispatchers.Main) {
+                tvQtStatus?.text = statusText
             }
-        } else {
-            tvQtStatus?.text = "Quick Tile"
         }
     }
 
@@ -263,8 +251,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         if (mainViewModel.isRunning.value == true) {
             setTestState(getString(R.string.connection_test_testing))
             mainViewModel.testCurrentServerRealPing()
-        } else {
-            // service not running: keep existing no-op (could show a message if desired)
         }
     }
 
@@ -479,9 +465,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         }
     }
 
-    /**
-     * import config from qrcode
-     */
     private fun importQRcode(): Boolean {
         launchQRCodeScanner { scanResult ->
             if (scanResult != null) {
@@ -491,9 +474,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         return true
     }
 
-    /**
-     * import config from clipboard
-     */
     private fun importClipboard()
             : Boolean {
         try {
@@ -535,9 +515,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         }
     }
 
-    /**
-     * import config from local config file
-     */
     private fun importConfigLocal(): Boolean {
         try {
             showFileChooser()
@@ -548,10 +525,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         return true
     }
 
-
-    /**
-     * import config from sub
-     */
     fun importConfigViaSub(): Boolean {
         showLoading()
 
@@ -608,7 +581,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                 }
             }
             .setNegativeButton(android.R.string.cancel) { _, _ ->
-                //do noting
             }
             .show()
     }
@@ -627,7 +599,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                 }
             }
             .setNegativeButton(android.R.string.cancel) { _, _ ->
-                //do noting
             }
             .show()
     }
@@ -646,7 +617,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                 }
             }
             .setNegativeButton(android.R.string.cancel) { _, _ ->
-                //do noting
             }
             .show()
     }
@@ -662,9 +632,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         }
     }
 
-    /**
-     * show file chooser
-     */
     private fun showFileChooser() {
         launchFileChooser { uri ->
             if (uri == null) {
@@ -675,9 +642,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         }
     }
 
-    /**
-     * read content from uri
-     */
     private fun readContentFromUri(uri: Uri) {
         try {
             contentResolver.openInputStream(uri).use { input ->
@@ -688,10 +652,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         }
     }
 
-    /**
-     * Locates and scrolls to the currently selected server.
-     * If the selected server is in a different group, automatically switches to that group first.
-     */
     private fun locateSelectedServer() {
         val targetSubscriptionId = mainViewModel.findSubscriptionIdBySelect()
         if (targetSubscriptionId.isNullOrEmpty()) {
@@ -705,7 +665,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             return
         }
 
-        // Switch to target group if needed, then scroll to the server
         if (binding.viewPager.currentItem != targetGroupIndex) {
             binding.viewPager.setCurrentItem(targetGroupIndex, true)
             binding.viewPager.postDelayed({ scrollToSelectedServer(targetGroupIndex) }, 1000)
@@ -714,10 +673,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         }
     }
 
-    /**
-     * Scrolls to the selected server in the specified fragment.
-     * @param groupIndex The index of the group/fragment to scroll in
-     */
     private fun scrollToSelectedServer(groupIndex: Int) {
         val itemId = groupPagerAdapter.getItemId(groupIndex)
         val fragment = supportFragmentManager.findFragmentByTag("f$itemId") as? GroupServerFragment
@@ -737,9 +692,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         return super.onKeyDown(keyCode, event)
     }
 
-
     override fun onNavigationItemSelected(item: MenuItem): Boolean {
-        // Handle navigation view item clicks here.
         when (item.itemId) {
             R.id.sub_setting -> requestActivityLauncher.launch(Intent(this, SubSettingActivity::class.java))
             R.id.per_app_proxy_settings -> requestActivityLauncher.launch(Intent(this, PerAppProxyActivity::class.java))
@@ -762,4 +715,3 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         super.onDestroy()
     }
 }
-

@@ -48,51 +48,11 @@ object V2RayServiceManager {
             }
         }
 
-    fun resolveQsTileTarget(): String? {
-        val mode = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_MODE, "0")
-        val value = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_VAL, "")
-        
-        LogUtil.d(AppConfig.TAG, "QSTile target resolving: mode=$mode, value=$value")
-
-        return when (mode) {
-            "1" -> { 
-                val target = SettingsManager.getBestPingGuid()
-                LogUtil.d(AppConfig.TAG, "QSTile resolved mode 1: best ping target=$target")
-                target
-            }
-            "2" -> { 
-                if (value.isNullOrBlank()) return SettingsManager.getBestPingGuid()
-                val allServers = MmkvManager.decodeAllServerList()
-                val target = allServers.find { guid ->
-                    val config = MmkvManager.decodeServerConfig(guid)
-                    config?.configType == EConfigType.POLICYGROUP && config.remarks.equals(value, true)
-                } ?: SettingsManager.getBestPingGuid()
-                LogUtil.d(AppConfig.TAG, "QSTile resolved mode 2: specific policy target=$target")
-                target
-            }
-            "3", "4" -> { 
-                val allServers = MmkvManager.decodeAllServerList()
-                val target = allServers.find { guid ->
-                    val config = MmkvManager.decodeServerConfig(guid)
-                    config?.configType == EConfigType.POLICYGROUP && config.remarks == "Global QS Target"
-                } ?: SettingsManager.getBestPingGuid()
-                LogUtil.d(AppConfig.TAG, "QSTile resolved mode $mode: global policy target=$target")
-                target
-            }
-            else -> { 
-                val target = MmkvManager.getSelectServer() ?: SettingsManager.getBestPingGuid()
-                LogUtil.d(AppConfig.TAG, "QSTile resolved mode $mode: default selected target=$target")
-                target
-            }
-        }
-    }
-
     fun startVServiceFromToggle(context: Context): Boolean {
-        val targetGuid = resolveQsTileTarget()
+        val targetGuid = QuickTileManager.resolveQsTileTarget()
         if (targetGuid != null) {
             MmkvManager.setSelectServer(targetGuid)
         }
-
         if (MmkvManager.getSelectServer().isNullOrEmpty()) {
             context.toast(R.string.app_tile_first_use)
             return false
@@ -102,7 +62,6 @@ object V2RayServiceManager {
     }
 
     fun startVService(context: Context, guid: String? = null) {
-        LogUtil.i(AppConfig.TAG, "StartCore-Manager: startVService from ${context::class.java.simpleName}")
         if (guid != null) {
             MmkvManager.setSelectServer(guid)
         }
@@ -119,17 +78,14 @@ object V2RayServiceManager {
 
     private fun startContextService(context: Context) {
         if (coreController.isRunning) {
-            LogUtil.w(AppConfig.TAG, "StartCore-Manager: Core already running")
             return
         }
         val guid = MmkvManager.getSelectServer()
         if (guid == null) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: No server selected")
             return
         }
         val config = MmkvManager.decodeServerConfig(guid)
         if (config == null) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to decode server config")
             return
         }
         if (config.configType != EConfigType.CUSTOM
@@ -137,7 +93,6 @@ object V2RayServiceManager {
             && !Utils.isValidUrl(config.server)
             && !Utils.isPureIpAddress(config.server.orEmpty())
         ) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Invalid server configuration")
             return
         }
         SettingsManager.refreshRuntimeSocksPort()
@@ -150,10 +105,8 @@ object V2RayServiceManager {
 
         val isVpnMode = SettingsManager.isVpnMode()
         val intent = if (isVpnMode) {
-            LogUtil.i(AppConfig.TAG, "StartCore-Manager: Starting VPN service")
             Intent(context.applicationContext, V2RayVpnService::class.java)
         } else {
-            LogUtil.i(AppConfig.TAG, "StartCore-Manager: Starting Proxy service")
             Intent(context.applicationContext, V2RayProxyOnlyService::class.java)
         }
 
@@ -166,29 +119,22 @@ object V2RayServiceManager {
 
     fun startCoreLoop(vpnInterface: ParcelFileDescriptor?): Boolean {
         if (coreController.isRunning) {
-            LogUtil.w(AppConfig.TAG, "StartCore-Manager: Core already running")
             return false
         }
         val service = getService()
         if (service == null) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Service is null")
             return false
         }
         val guid = MmkvManager.getSelectServer()
         if (guid == null) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: No server selected")
             return false
         }
         val config = MmkvManager.decodeServerConfig(guid)
         if (config == null) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to decode server config")
             return false
         }
-        LogUtil.i(AppConfig.TAG, "StartCore-Manager: Starting core loop for ${config.remarks}")
         val result = V2rayConfigManager.getV2rayConfig(service, guid)
-        LogUtil.d(AppConfig.TAG, result.content)
         if (!result.status) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to get V2Ray config")
             return false
         }
         try {
@@ -198,7 +144,6 @@ object V2RayServiceManager {
             mFilter.addAction(Intent.ACTION_USER_PRESENT)
             ContextCompat.registerReceiver(service, mMsgReceive, mFilter, Utils.receiverFlags())
         } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to register receiver", e)
             return false
         }
         currentConfig = config
@@ -210,11 +155,9 @@ object V2RayServiceManager {
             NotificationManager.showNotification(currentConfig)
             coreController.startLoop(result.content, tunFd)
         } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to start core loop", e)
             return false
         }
         if (coreController.isRunning == false) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Core failed to start")
             MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, "")
             NotificationManager.cancelNotification()
             return false
@@ -222,9 +165,7 @@ object V2RayServiceManager {
         try {
             MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
             NotificationManager.startSpeedNotification(currentConfig)
-            LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core started successfully")
         } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to complete startup", e)
             return false
         }
         return true
@@ -266,14 +207,12 @@ object V2RayServiceManager {
             try {
                 time = coreController.measureDelay(SettingsManager.getDelayTestUrl())
             } catch (e: Exception) {
-                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to measure delay", e)
                 errorStr = e.message?.substringAfter("\":") ?: "empty message"
             }
             if (time == -1L) {
                 try {
                     time = coreController.measureDelay(SettingsManager.getDelayTestUrl(true))
                 } catch (e: Exception) {
-                    LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to measure delay", e)
                     errorStr = e.message?.substringAfter("\":") ?: "empty message"
                 }
             }
@@ -305,7 +244,6 @@ object V2RayServiceManager {
                 serviceControl.stopService()
                 0
             } catch (e: Exception) {
-                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop service", e)
                 -1
             }
         }
@@ -325,7 +263,6 @@ object V2RayServiceManager {
                 else -> return -1L
             }
             if (destIP.isBlank() || destPort == 0L) {
-                LogUtil.d(AppConfig.TAG, "ProcessFinder: Find $network connection from $srcIP:$srcPort to :$destPort, (no dest)")
                 return -1L
             }
             return try {
@@ -334,7 +271,6 @@ object V2RayServiceManager {
                     InetSocketAddress(srcIP, srcPort.toInt()),
                     InetSocketAddress(destIP, destPort.toInt())
                 ).toLong()
-                LogUtil.d(AppConfig.TAG, "ProcessFinder: Find $network connection from $srcIP:$srcPort to $destIP:$destPort, uid=$uid")
                 uid
             } catch (e: Exception) {
                 -1L
@@ -356,11 +292,9 @@ object V2RayServiceManager {
                 AppConfig.MSG_UNREGISTER_CLIENT -> {}
                 AppConfig.MSG_STATE_START -> {}
                 AppConfig.MSG_STATE_STOP -> {
-                    LogUtil.i(AppConfig.TAG, "StartCore-Manager: Stop service")
                     serviceControl.stopService()
                 }
                 AppConfig.MSG_STATE_RESTART -> {
-                    LogUtil.i(AppConfig.TAG, "StartCore-Manager: Restart service")
                     serviceControl.stopService()
                     Thread.sleep(500L)
                     startVService(serviceControl.getService())
@@ -371,15 +305,12 @@ object V2RayServiceManager {
             }
             when (intent?.action) {
                 Intent.ACTION_SCREEN_OFF -> {
-                    LogUtil.i(AppConfig.TAG, "StartCore-Manager: Screen off")
                     NotificationManager.stopSpeedNotification(currentConfig)
                 }
                 Intent.ACTION_SCREEN_ON -> {
-                    LogUtil.i(AppConfig.TAG, "StartCore-Manager: Screen on")
                     NotificationManager.startSpeedNotification(currentConfig)
                 }
             }
         }
     }
 }
-

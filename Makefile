@@ -70,7 +70,7 @@ import (
 func main() {
 	exePath := os.Args[1]
 	if _, err := os.Stat(exePath); os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "[GO-WRAPPER] FATAL ERROR: Binary not found at %s\n", exePath)
+		fmt.Fprintf(os.Stderr, "[GO-WRAPPER] FATAL ERROR: Binary not found at %s\\n", exePath)
 		os.Exit(1)
 	}
 	cmd := exec.Command(exePath, os.Args[2:]...)
@@ -93,7 +93,7 @@ func main() {
 	cmd.Env = newEnv
 
 	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "[GO-WRAPPER] EXECUTION ERROR: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[GO-WRAPPER] EXECUTION ERROR: %v\\n", err)
 		os.Exit(1)
 	}
 }
@@ -124,6 +124,7 @@ help:
 	@echo "  make debug     - Interactive pipeline + build Android Debug APK [FLAVOR=fdroid|playstore]"
 	@echo "  make release   - Interactive pipeline + build Android Release APK [FLAVOR=fdroid|playstore]"
 	@echo "  make build_all - Fully automated pipeline (alias for 'make all' + 'make release')"
+	@echo "  make diff      - Generate .diff file with your changes [UPSTREAM=upstream] [BRANCH=master]"
 
 check:
 	@echo "=== Environment Check ==="
@@ -236,7 +237,7 @@ clean:
 
 # --- ANDROID APP BUILD TASKS ---
 # Usage: make debug FLAVOR=playstore
-#        make release FLAVOR=fdroid (default)
+#        make release FLAVOR=fdroid
 
 FLAVOR ?= playstore
 ifeq ($(FLAVOR),playstore)
@@ -248,7 +249,7 @@ endif
 .PHONY: interactive_prep debug release build_all
 
 interactive_prep: check
-	@printf "\nRebuild Tunnel? [y/N]: "; read ans_t; \
+	@printf "\\nRebuild Tunnel? [y/N]: "; read ans_t; \
 	if [ "$$ans_t" = "y" ] || [ "$$ans_t" = "Y" ]; then $(MAKE) tunnel; fi
 	@printf "Rebuild Core? [y/N]: "; read ans_c; \
 	if [ "$$ans_c" = "y" ] || [ "$$ans_c" = "Y" ]; then $(MAKE) core; fi
@@ -277,4 +278,22 @@ build_all: all
 	@APK_DIR="$(PROJECT_ROOT)/V2rayNG/app/build/outputs/apk/$(FLAVOR)/release"; \
 	echo "APK can be found in $$APK_DIR"; \
 	explorer.exe $$(cygpath -w "$$APK_DIR") 2>/dev/null || true
+
+# --- FORK DIFF GENERATOR ---
+# Usage: make diff UPSTREAM=upstream BRANCH=master
+
+UPSTREAM ?= upstream
+BRANCH   ?= master
+
+.PHONY: diff
+diff:
+	@echo "Updating $(UPSTREAM) remote..."
+	@git fetch $(UPSTREAM) $(BRANCH)
+	@echo "Staging new files to include in diff..."
+	@git add -N .
+	@echo "Generating diff: $(UPSTREAM)/$(BRANCH) -> Working Tree (excluding .gitignore entries)..."
+	@set -f; IGNORES=$$(tr -d '\r' < .gitignore | awk 'NF && !/^#/ && !/^!/{print ":!"$$0}'); \
+	git diff $(UPSTREAM)/$(BRANCH) -- . $$IGNORES > my_v2rayng_changes.diff; \
+	set +f
+	@echo "DONE! File created: my_v2rayng_changes.diff"
 

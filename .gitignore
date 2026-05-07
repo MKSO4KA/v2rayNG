@@ -14,6 +14,8 @@ obj/*
 *.a
 *.o.d
 *.reg
+*.json
+*.diff
 project_full_source.txt
 
 # Personal scripts and tools

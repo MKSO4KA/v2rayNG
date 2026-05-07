@@ -281,9 +281,11 @@ build_all: all
 
 # --- FORK DIFF GENERATOR ---
 # Usage: make diff UPSTREAM=upstream BRANCH=master
+# EXT_FILTER specifies which file types to include, ignoring binary/garbage files.
 
-UPSTREAM ?= upstream
-BRANCH   ?= master
+UPSTREAM   ?= upstream
+BRANCH     ?= master
+EXT_FILTER ?= "*.kt" "*.kts" "*.java" "*.go" "*.xml" "*.gradle" "*.properties" "Makefile" "*.md" "*.gitignore" "*.gitmodules"
 
 .PHONY: diff
 diff:
@@ -291,9 +293,9 @@ diff:
 	@git fetch $(UPSTREAM) $(BRANCH)
 	@echo "Staging new files to include in diff..."
 	@git add -N .
-	@echo "Generating diff: $(UPSTREAM)/$(BRANCH) -> Working Tree (excluding .gitignore entries)..."
-	@set -f; IGNORES=$$(tr -d '\r' < .gitignore | awk 'NF && !/^#/ && !/^!/{print ":!"$$0}'); \
-	git diff $(UPSTREAM)/$(BRANCH) -- . $$IGNORES > my_v2rayng_changes.diff; \
-	set +f
+	@echo "Calculating merge-base to isolate only your changes..."
+	@BASE=$$(git merge-base $(UPSTREAM)/$(BRANCH) HEAD); \
+	echo "Generating diff from $$BASE -> Working Tree (Filtered by extensions)..."; \
+	git diff $$BASE HEAD -- $(EXT_FILTER) > my_v2rayng_changes.diff
 	@echo "DONE! File created: my_v2rayng_changes.diff"
 

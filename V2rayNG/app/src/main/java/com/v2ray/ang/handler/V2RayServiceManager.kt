@@ -29,6 +29,7 @@ import libv2ray.CoreController
 import libv2ray.ProcessFinder
 import java.lang.ref.SoftReference
 import java.net.InetSocketAddress
+import java.util.concurrent.ConcurrentHashMap
 
 object V2RayServiceManager {
 
@@ -196,6 +197,15 @@ object V2RayServiceManager {
         return coreController.queryStats(tag, link)
     }
 
+    fun getCoreDelay(): Long {
+        if (coreController.isRunning == false) return -1L
+        return try {
+            coreController.measureDelay(SettingsManager.getDelayTestUrl())
+        } catch (e: Exception) {
+            -1L
+        }
+    }
+
     private fun measureV2rayDelay() {
         if (coreController.isRunning == false) {
             return
@@ -214,7 +224,7 @@ object V2RayServiceManager {
                     time = coreController.measureDelay(SettingsManager.getDelayTestUrl(true))
                 } catch (e: Exception) {
                     errorStr = e.message?.substringAfter("\":") ?: "empty message"
-                }
+            }
             }
             val result = if (time >= 0) {
                 service.getString(R.string.connection_test_available, time)
@@ -235,6 +245,8 @@ object V2RayServiceManager {
     }
 
     private class CoreCallback : CoreCallbackHandler {
+        private val recentPings = ConcurrentHashMap<String, Long>()
+
         override fun startup(): Long {
             return 0
         }
@@ -248,6 +260,52 @@ object V2RayServiceManager {
             }
         }
         override fun onEmitStatus(l: Long, s: String?): Long {
+            if (s == null) return 0
+            
+            if (l == 2L) { // Observatory ping update
+                val parts = s.split(":")
+                if (parts.size == 2) {
+                    val tag = parts[0]
+                    val latency = parts[1].toLongOrNull() ?: -1L
+                    
+                    val activeGuid = V2rayConfigManager.groupTagMap[tag]
+                    if (activeGuid != null) {
+                        val activeProfile = MmkvManager.decodeServerConfig(activeGuid)
+                        if (activeProfile != null) {
+                            recentPings[activeProfile.remarks] = latency
+                            NotificationManager.updateNodeLatency(activeProfile.remarks, latency)
+                        }
+                    }
+                }
+            } else if (l == 1L) { // Switch active node
+                val activeGuid = V2rayConfigManager.groupTagMap[s]
+                var activeProfile = if (activeGuid != null) MmkvManager.decodeServerConfig(activeGuid) else null
+                
+                if (activeProfile == null && s != AppConfig.TAG_DIRECT && s != AppConfig.TAG_BLOCKED) {
+                    activeProfile = SettingsManager.getServerViaRemarks(s)
+                }
+
+                if (activeProfile != null) {
+                    val summary = recentPings.entries.joinToString(", ") { "${it.key}: ${if (it.value >= 0) "${it.value}ms" else "Timeout"}" }
+                    if (summary.isNotBlank()) {
+                        LogUtil.i(AppConfig.TAG, "[Bridge-API] Tag Selected: $s -> Mapped to: ${activeProfile.remarks}")
+                        LogUtil.i(AppConfig.TAG, "[Bridge-API] Current Latency Table: [$summary]")
+                    } else {
+                        LogUtil.i(AppConfig.TAG, "[Bridge-API] Tag Selected: $s -> Mapped to: ${activeProfile.remarks}")
+                    }
+                    recentPings.clear()
+
+                    NotificationManager.updateActiveNode(activeProfile.remarks)
+                    val service = serviceControl?.get()?.getService()
+                    if (service != null) {
+                        MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_RUNNING, "")
+                    }
+                } else if (s == AppConfig.TAG_DIRECT || s == AppConfig.TAG_BLOCKED) {
+                    LogUtil.d(AppConfig.TAG, "[Bridge-API] Internal detour: $s")
+                } else {
+                    LogUtil.w(AppConfig.TAG, "[Bridge-API] Unmapped tag selected: $s")
+                }
+            }
             return 0
         }
     }
@@ -280,24 +338,28 @@ object V2RayServiceManager {
 
     private class ReceiveMessageHandler : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
-            val serviceControl = serviceControl?.get() ?: return
+            val serviceControlInstance = serviceControl?.get() ?: return
             when (intent?.getIntExtra("key", 0)) {
                 AppConfig.MSG_REGISTER_CLIENT -> {
                     if (coreController.isRunning) {
-                        MessageUtil.sendMsg2UI(serviceControl.getService(), AppConfig.MSG_STATE_RUNNING, "")
+                        MessageUtil.sendMsg2UI(serviceControlInstance.getService(), AppConfig.MSG_STATE_RUNNING, "")
                     } else {
-                        MessageUtil.sendMsg2UI(serviceControl.getService(), AppConfig.MSG_STATE_NOT_RUNNING, "")
+                        MessageUtil.sendMsg2UI(serviceControlInstance.getService(), AppConfig.MSG_STATE_NOT_RUNNING, "")
                     }
                 }
                 AppConfig.MSG_UNREGISTER_CLIENT -> {}
                 AppConfig.MSG_STATE_START -> {}
                 AppConfig.MSG_STATE_STOP -> {
-                    serviceControl.stopService()
+                    serviceControlInstance.stopService()
                 }
                 AppConfig.MSG_STATE_RESTART -> {
-                    serviceControl.stopService()
-                    Thread.sleep(500L)
-                    startVService(serviceControl.getService())
+                    if (serviceControlInstance is V2RayVpnService) {
+                        serviceControlInstance.softRestart()
+                    } else {
+                        serviceControlInstance.stopService()
+                        Thread.sleep(500L)
+                        startVService(serviceControlInstance.getService())
+                    }
                 }
                 AppConfig.MSG_MEASURE_DELAY -> {
                     measureV2rayDelay()
@@ -314,3 +376,4 @@ object V2RayServiceManager {
         }
     }
 }
+

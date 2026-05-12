@@ -257,7 +257,8 @@ interactive_prep: check
 
 debug: interactive_prep
 	@echo "[5/5] Building Android App (Debug, Flavor: $(GRADLE_FLAVOR))..."
-	@cd "$(PROJECT_ROOT)/V2rayNG" && chmod +x gradlew && ./gradlew assemble$(GRADLE_FLAVOR)Debug
+	# Добавляем clean перед сборкой
+	@cd "$(PROJECT_ROOT)/V2rayNG" && chmod +x gradlew && ./gradlew clean assemble$(GRADLE_FLAVOR)Debug
 	@echo "=== DEBUG BUILD COMPLETE ==="
 	@APK_DIR="$(PROJECT_ROOT)/V2rayNG/app/build/outputs/apk/$(FLAVOR)/debug"; \
 	echo "APK can be found in $$APK_DIR"; \
@@ -265,7 +266,8 @@ debug: interactive_prep
 
 release: interactive_prep
 	@echo "[5/5] Building Android App (Release, Flavor: $(GRADLE_FLAVOR))..."
-	@cd "$(PROJECT_ROOT)/V2rayNG" && chmod +x gradlew && ./gradlew assemble$(GRADLE_FLAVOR)Release
+	# Добавляем clean перед сборкой
+	@cd "$(PROJECT_ROOT)/V2rayNG" && chmod +x gradlew && ./gradlew clean assemble$(GRADLE_FLAVOR)Release
 	@echo "=== RELEASE BUILD COMPLETE ==="
 	@APK_DIR="$(PROJECT_ROOT)/V2rayNG/app/build/outputs/apk/$(FLAVOR)/release"; \
 	echo "APK can be found in $$APK_DIR"; \
@@ -285,17 +287,76 @@ build_all: all
 
 UPSTREAM   ?= upstream
 BRANCH     ?= master
-EXT_FILTER ?= "*.kt" "*.kts" "*.java" "*.go" "*.xml" "*.gradle" "*.properties" "Makefile" "*.md" "*.gitignore" "*.gitmodules"
+EXT_FILTER ?= "*.kt" "*.kts" "*.java" "*.go" "*.c" "*.h" "*.mk" "*.sh" "*.xml" "*.gradle" "*.properties" "Makefile" "*.md" "*.yml" "*.yaml" "*.gitignore" "*.gitmodules"
 
 .PHONY: diff
 diff:
 	@echo "Updating $(UPSTREAM) remote..."
 	@git fetch $(UPSTREAM) $(BRANCH)
-	@echo "Staging new files to include in diff..."
+	
+	@echo "Staging new files in parent and submodules..."
 	@git add -N .
-	@echo "Calculating merge-base to isolate only your changes..."
+	@git submodule foreach --recursive 'git add -N .'
+	
+	@echo "Calculating merge-base..."
 	@BASE=$$(git merge-base $(UPSTREAM)/$(BRANCH) HEAD); \
-	echo "Generating diff from $$BASE -> Working Tree (Filtered by extensions)..."; \
-	git diff $$BASE HEAD -- $(EXT_FILTER) > my_v2rayng_changes.diff
+	echo "Base commit: $$BASE"; \
+	echo "Generating diff (Parent)..." >&2; \
+	git diff $$BASE HEAD -- $(EXT_FILTER) > my_v2rayng_changes.diff; \
+	\
+	echo "Generating diff (Submodules)..." >&2; \
+	git submodule foreach --recursive " \
+		# Получаем хеш коммита подмодуля, который был в базовой версии проекта \
+		SM_BASE=\$$(git -C $(CURDIR) rev-parse \$$BASE:\$$displaypath 2>/dev/null); \
+		if [ -z \"\$$SM_BASE\" ]; then \
+			# Если подмодуля не было, сравниваем с пустым деревом \
+			SM_BASE=\$$(git hash-object -t tree /dev/null); \
+			echo \"Submodule \$$displaypath is new.\"; \
+		fi; \
+		echo \"\n--- Submodule: \$$displaypath ---\" >> $(CURDIR)/my_v2rayng_changes.diff; \
+		git diff \$$SM_BASE HEAD -- $(EXT_FILTER) >> $(CURDIR)/my_v2rayng_changes.diff \
+	"
 	@echo "DONE! File created: my_v2rayng_changes.diff"
+	
+# --- ADB INSTALLATION TASK ---
+.PHONY: install
 
+install:
+	@echo "=== Поиск последнего APK для установки (Flavor: $(FLAVOR)) ==="
+	@LATEST_RELEASE=$$(ls -t $(PROJECT_ROOT)/V2rayNG/app/build/outputs/apk/$(FLAVOR)/release/*.apk 2>/dev/null | head -n 1); \
+	LATEST_DEBUG=$$(ls -t $(PROJECT_ROOT)/V2rayNG/app/build/outputs/apk/$(FLAVOR)/debug/*.apk 2>/dev/null | head -n 1); \
+	SELECTED_APK=""; \
+	if [ -n "$$LATEST_RELEASE" ] && [ -n "$$LATEST_DEBUG" ]; then \
+		if [ "$$LATEST_RELEASE" -nt "$$LATEST_DEBUG" ]; then SELECTED_APK="$$LATEST_RELEASE"; else SELECTED_APK="$$LATEST_DEBUG"; fi; \
+	elif [ -n "$$LATEST_RELEASE" ]; then SELECTED_APK="$$LATEST_RELEASE"; \
+	elif [ -n "$$LATEST_DEBUG" ]; then SELECTED_APK="$$LATEST_DEBUG"; \
+	fi; \
+	if [ -z "$$SELECTED_APK" ]; then \
+		echo "Ошибка: APK не найден."; \
+		exit 1; \
+	fi; \
+	ADB_BIN="$(ANDROID_HOME)/platform-tools/adb.exe"; \
+	WIN_APK_PATH=$$(cygpath -w "$$SELECTED_APK"); \
+	APK_NAME=$$(basename "$$SELECTED_APK"); \
+	echo "Найден файл: $$SELECTED_APK"; \
+	echo "Попытка прямой установки через ADB..."; \
+	if "$$ADB_BIN" install -r "$$WIN_APK_PATH"; then \
+		echo "=== Установка завершена успешно ==="; \
+	else \
+		echo "------------------------------------------------------------"; \
+		echo "ОШИБКА: Прямая установка заблокирована телефоном."; \
+		echo "СОВЕТ: Включите 'Установка через USB' в настройках разработчика."; \
+		echo "------------------------------------------------------------"; \
+		echo "Копирую APK в память телефона (Download/)..."; \
+		if "$$ADB_BIN" push "$$WIN_APK_PATH" "//sdcard/Download/$$APK_NAME"; then \
+			echo "Файл успешно скопирован в: /sdcard/Download/$$APK_NAME"; \
+			echo "------------------------------------------------------------"; \
+			echo "Попытка открыть папку загрузок на телефоне..."; \
+			"$$ADB_BIN" shell am start -a android.intent.action.VIEW \
+				-d "content://com.android.externalstorage.documents/root/primary:Download" \
+				-t "vnd.android.document/directory" >/dev/null 2>&1 || \
+			"$$ADB_BIN" shell am start -n com.android.documentsui/.files.FilesActivity >/dev/null 2>&1 || \
+			echo "Не удалось открыть папку автоматически. Откройте её вручную."; \
+			echo "------------------------------------------------------------"; \
+		fi; \
+	fi

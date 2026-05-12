@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="title_nearby_share">Nearby Share Sync</string>
+    <string name="nearby_send">Отправить настройки</string>
+    <string name="nearby_receive">Получить настройки (Сканировать QR)</string>
+    <string name="nearby_status_idle">Статус: Ожидание</string>
+</resources>

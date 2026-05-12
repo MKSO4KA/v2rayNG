@@ -1,8 +1,10 @@
 package com.v2ray.ang.handler
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.text.TextUtils
+import com.v2ray.ang.AngApplication
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.AppConfig.HY2
 import com.v2ray.ang.R
@@ -267,7 +269,7 @@ object AngConfigManager {
                     }
                     var count = 0
                     for (srv in serverList.reversed()) {
-                        val config = CustomFmt.parse(JsonUtil.toJson(srv)) ?: continue
+                        val config = CustomFmt.parse(JsonUtil.toJson(srv))
                         config.subscriptionId = subid
                         config.description = generateDescription(config)
                         val key = MmkvManager.encodeServerConfig("", config)
@@ -280,7 +282,7 @@ object AngConfigManager {
                 LogUtil.e(AppConfig.TAG, "Failed to parse custom config server JSON array", e)
             }
             try {
-                val config = CustomFmt.parse(server) ?: return 0
+                val config = CustomFmt.parse(server)
                 config.subscriptionId = subid
                 config.description = generateDescription(config)
                 if (!append) {
@@ -295,7 +297,7 @@ object AngConfigManager {
             return 0
         } else if (server.startsWith("[Interface]") && server.contains("[Peer]")) {
             try {
-                val config = WireguardFmt.parseWireguardConfFile(server) ?: return R.string.toast_incorrect_protocol
+                val config = WireguardFmt.parseWireguardConfFile(server)
                 config.description = generateDescription(config)
                 if (!append) {
                     MmkvManager.removeServerViaSubid(subid)
@@ -470,14 +472,39 @@ object AngConfigManager {
             }
 
             LogUtil.d(AppConfig.TAG, "Received subscription config text length: ${configText.length}")
+
+            val oldServers = MmkvManager.decodeServerList(it.guid)
+            val oldConfigs = oldServers.mapNotNull { guid -> 
+                MmkvManager.decodeServerConfig(guid)?.let { c -> c.server + ":" + c.serverPort + c.remarks } 
+            }.toSet()
             
             val count = parseConfigViaSub(configText, it.guid, false)
             if (count > 0) {
+                val newServers = MmkvManager.decodeServerList(it.guid)
+                val newConfigs = newServers.mapNotNull { guid -> 
+                    MmkvManager.decodeServerConfig(guid)?.let { c -> c.server + ":" + c.serverPort + c.remarks } 
+                }.toSet()
+
+                val isChanged = oldConfigs != newConfigs
+
                 it.subscription.lastUpdated = System.currentTimeMillis()
                 MmkvManager.encodeSubscription(it.guid, it.subscription)
                 AutoOutboundBuilder.ensurePolicyGroups(it.guid)
                 GistRuleProvider.syncBlocklist(it.guid)
                 LogUtil.i(AppConfig.TAG, "Subscription updated: ${it.subscription.remarks}, $count configs")
+
+                if (isChanged) {
+                    val selectedGuid = MmkvManager.getSelectServer()
+                    val selectedConfig = selectedGuid?.let { MmkvManager.decodeServerConfig(it) }
+                    if (selectedConfig?.subscriptionId == it.guid || selectedConfig?.policyGroupSubscriptionId == it.guid) {
+                        LogUtil.i(AppConfig.TAG, "Active subscription updated and changed. Restarting service.")
+                        val intent = Intent(AppConfig.BROADCAST_ACTION_SERVICE)
+                        intent.`package` = AppConfig.ANG_PACKAGE
+                        intent.putExtra("key", AppConfig.MSG_STATE_RESTART)
+                        AngApplication.application.sendBroadcast(intent)
+                    }
+                }
+
                 return SubscriptionUpdateResult(
                     configCount = count,
                     successCount = 1

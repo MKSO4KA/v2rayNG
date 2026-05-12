@@ -198,6 +198,7 @@ dependencies {
     implementation(libs.work.runtime.ktx)
     implementation(libs.work.multiprocess)
     implementation(libs.multidex)
+    implementation(libs.play.services.nearby)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

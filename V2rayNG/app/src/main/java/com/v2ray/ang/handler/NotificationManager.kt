@@ -24,6 +24,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.min
 
 object NotificationManager {
@@ -38,6 +39,32 @@ object NotificationManager {
     private var mBuilder: NotificationCompat.Builder? = null
     private var speedNotificationJob: Job? = null
     private var mNotificationManager: NotificationManager? = null
+    
+    @Volatile private var externalActiveNodeName: String? = null
+    @Volatile private var externalActiveNodeLatency: String? = null
+    private val nodeLatencyMap = ConcurrentHashMap<String, String>()
+
+    fun updateActiveNode(nodeName: String) {
+        externalActiveNodeName = nodeName
+        val latency = nodeLatencyMap[nodeName] ?: "..."
+        externalActiveNodeLatency = latency
+        
+        val title = "[V2RayNG] Active: $nodeName • $latency"
+        mBuilder?.setContentTitle(title)
+        getNotificationManager()?.notify(NOTIFICATION_ID, mBuilder?.build())
+    }
+    
+    fun updateNodeLatency(nodeName: String, latencyMs: Long) {
+        val latencyStr = if (latencyMs >= 0) "${latencyMs}ms" else "Timeout"
+        nodeLatencyMap[nodeName] = latencyStr
+        
+        if (nodeName == externalActiveNodeName) {
+            externalActiveNodeLatency = latencyStr
+            val title = "[V2RayNG] Active: $nodeName • $latencyStr"
+            mBuilder?.setContentTitle(title)
+            getNotificationManager()?.notify(NOTIFICATION_ID, mBuilder?.build())
+        }
+    }
 
     /**
      * Starts the speed notification.
@@ -60,6 +87,9 @@ object NotificationManager {
                 if (delay <= 0L) 999999L else delay
             }
             initialActiveProxyName = bestPair?.second?.remarks
+            if (externalActiveNodeName == null) {
+                externalActiveNodeName = initialActiveProxyName
+            }
 
             configPairs.forEachIndexed { index, pair ->
                 val tag = "proxy-${index + 1}"
@@ -74,14 +104,16 @@ object NotificationManager {
             }
         }
 
+        var lastDelayText = "..."
+        var cycleCount = 0
+        val lastTraffic = mutableMapOf<String, Long>()
+
         speedNotificationJob = CoroutineScope(Dispatchers.IO).launch {
             while (isActive) {
                 val queryTime = System.currentTimeMillis()
                 val sinceLastQueryIn = (queryTime - lastQueryTime)
 
-                // If the query interval is too short, skip this round to avoid excessive CPU usage
                 if (sinceLastQueryIn < QUERY_INTERVAL_MS) {
-                    LogUtil.w(AppConfig.TAG, "Query interval too short: ${sinceLastQueryIn}ms, skipping")
                     lastQueryTime = queryTime
                     delay(QUERY_INTERVAL_MS)
                     continue
@@ -90,21 +122,28 @@ object NotificationManager {
 
                 var proxyTotal = 0L
                 val text = StringBuilder()
-                var maxTraffic = -1L
-                var activeProxyName: String? = initialActiveProxyName
+                val currentTraffic = mutableMapOf<String, Long>()
 
                 outboundTags.forEach { tag ->
                     val up = V2RayServiceManager.queryStats(tag, AppConfig.UPLINK)
                     val down = V2RayServiceManager.queryStats(tag, AppConfig.DOWNLINK)
-                    if (up + down > 0) {
+                    val total = up + down
+                    currentTraffic[tag] = total
+
+                    if (total > 0) {
                         appendSpeedString(text, tagToNameMap[tag] ?: tag, up / sinceLastQueryInSeconds, down / sinceLastQueryInSeconds)
-                        proxyTotal += (up + down)
-                        if ((up + down) > maxTraffic) {
-                            maxTraffic = (up + down)
-                            activeProxyName = tagToNameMap[tag]
-                        }
+                        proxyTotal += total
                     }
                 }
+                lastTraffic.putAll(currentTraffic)
+
+                if (cycleCount % 5 == 0 && V2RayServiceManager.isRunning()) {
+                    val delay = V2RayServiceManager.getCoreDelay()
+                    lastDelayText = if (delay >= 0) "${delay}ms" else "Error"
+                    // We don't log generic core delay continuously unless needed for debug
+                }
+                cycleCount++
+
                 val directUplink = V2RayServiceManager.queryStats(AppConfig.TAG_DIRECT, AppConfig.UPLINK)
                 val directDownlink = V2RayServiceManager.queryStats(AppConfig.TAG_DIRECT, AppConfig.DOWNLINK)
                 val zeroSpeed = proxyTotal == 0L && directUplink == 0L && directDownlink == 0L
@@ -118,10 +157,13 @@ object NotificationManager {
                         directDownlink / sinceLastQueryInSeconds
                     )
                     
-                    val title = if (currentConfig?.configType == EConfigType.POLICYGROUP && activeProxyName != null) {
-                        "QT → $activeProxyName"
+                    val activeProxyName = externalActiveNodeName ?: initialActiveProxyName
+                    
+                    val title = if (activeProxyName != null) {
+                        val lat = externalActiveNodeLatency ?: lastDelayText
+                        "[V2RayNG] Active: $activeProxyName • $lat"
                     } else {
-                        currentConfig?.remarks
+                        "[V2RayNG] Active: ${currentConfig?.remarks} • $lastDelayText"
                     }
                     
                     updateNotification(title, text.toString(), proxyTotal, directDownlink + directUplink)
@@ -140,10 +182,9 @@ object NotificationManager {
     fun showNotification(currentConfig: ProfileItem?) {
         val service = getService() ?: return
 
-        // Reset last query time to avoid querying stats too soon after showing the notification
         lastQueryTime = System.currentTimeMillis()
 
-        var initialTitle = currentConfig?.remarks
+        var initialTitle = "[V2RayNG] Active: ${currentConfig?.remarks ?: "None"}"
         if (currentConfig?.configType == EConfigType.POLICYGROUP) {
             val configPairs = AutoOutboundBuilder.getFilteredRoutingProxies(currentConfig.policyGroupFilter, currentConfig.policyGroupSubscriptionId)
             val bestPair = configPairs.minByOrNull { 
@@ -151,7 +192,10 @@ object NotificationManager {
                 if (delay <= 0L) 999999L else delay
             }
             if (bestPair != null) {
-                initialTitle = "QT → ${bestPair.second.remarks}"
+                val latency = nodeLatencyMap[bestPair.second.remarks] ?: "..."
+                initialTitle = "[V2RayNG] Active: ${bestPair.second.remarks} • $latency"
+                externalActiveNodeName = bestPair.second.remarks
+                externalActiveNodeLatency = latency
             }
         }
 
@@ -174,8 +218,6 @@ object NotificationManager {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 createNotificationChannel()
             } else {
-                // If earlier version channel ID is not used
-                // https://developer.android.com/reference/android/support/v4/app/NotificationCompat.Builder.html#NotificationCompat.Builder(android.content.Context)
                 ""
             }
 
@@ -197,8 +239,6 @@ object NotificationManager {
                 service.getString(R.string.title_service_restart),
                 restartV2RayPendingIntent
             )
-
-        //mBuilder?.setDefaults(NotificationCompat.FLAG_ONLY_ALERT_ONCE)
 
         service.startForeground(NOTIFICATION_ID, mBuilder?.build())
     }
@@ -224,7 +264,7 @@ object NotificationManager {
         speedNotificationJob?.let {
             it.cancel()
             speedNotificationJob = null
-            updateNotification(currentConfig?.remarks, "", 0, 0)
+            updateNotification("[V2RayNG] Active: ${currentConfig?.remarks}", "", 0, 0)
         }
     }
 

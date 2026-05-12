@@ -312,6 +312,10 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_main, menu)
 
+        menu.add(Menu.NONE, 10001, Menu.NONE, R.string.title_nearby_share)
+            .setIcon(R.drawable.ic_share_24dp)
+            .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+
         val searchItem = menu.findItem(R.id.search_view)
         if (searchItem != null) {
             val searchView = searchItem.actionView as SearchView
@@ -333,6 +337,10 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     }
 
     override fun onOptionsItemSelected(item: MenuItem) = when (item.itemId) {
+        10001 -> {
+            startActivity(Intent(this, NearbySharingActivity::class.java))
+            true
+        }
         R.id.import_qrcode -> {
             importQRcode()
             true
@@ -715,3 +723,4 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         super.onDestroy()
     }
 }
+

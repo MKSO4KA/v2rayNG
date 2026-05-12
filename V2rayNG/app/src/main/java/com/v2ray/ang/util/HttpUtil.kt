@@ -249,18 +249,16 @@ object HttpUtil {
                             val responseBody = response.body
                             val contentEncoding = response.header("Content-Encoding")
 
-                            val bodyStr = if (responseBody != null) {
-                                // If the user explicitly sets Accept-Encoding, OkHttp disables transparent decompression.
-                                // We must manually decompress gzip here.
-                                if ("gzip".equals(contentEncoding, ignoreCase = true)) {
-                                    LogUtil.i(AppConfig.TAG, "Manually decompressing gzip response...")
+                            val bodyStr = if ("gzip".equals(contentEncoding, ignoreCase = true)) {
+                                LogUtil.i(AppConfig.TAG, "Manually decompressing gzip response...")
+                                if (responseBody != null) {
                                     val gzipSource = GzipSource(responseBody.source())
                                     gzipSource.buffer().readUtf8()
                                 } else {
-                                    responseBody.string()
+                                    ""
                                 }
                             } else {
-                                ""
+                                responseBody?.string() ?: ""
                             }
 
                             LogUtil.d(AppConfig.TAG, "Parsed Body length: ${bodyStr.length}.")
@@ -360,10 +358,12 @@ object HttpUtil {
                     LogUtil.w(AppConfig.TAG, "Failed to download file, code=${response.code}, url=$url")
                     return false
                 }
-                val body = response.body ?: return false
-                body.byteStream().use { input ->
-                    targetFile.outputStream().use { output ->
-                        input.copyTo(output)
+                val body = response.body
+                if (body != null) {
+                    body.byteStream().use { input ->
+                        targetFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
                     }
                 }
                 true

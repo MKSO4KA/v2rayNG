@@ -24,10 +24,6 @@ import java.util.concurrent.TimeUnit
 
 object SubscriptionUpdater {
 
-    // -------------------------------------------------------------------------
-    // Public API — the only methods external callers should ever use
-    // -------------------------------------------------------------------------
-
     /**
      * Sync all subscription tasks with current settings.
      *
@@ -109,10 +105,6 @@ object SubscriptionUpdater {
             .cancelUniqueWork(taskName(subId))
     }
 
-    // -------------------------------------------------------------------------
-    // Internal scheduling logic
-    // -------------------------------------------------------------------------
-
     private fun taskName(subId: String) = "${AppConfig.SUBSCRIPTION_UPDATE_TASK_NAME}_$subId"
 
     private fun scheduleOne(
@@ -130,7 +122,6 @@ object SubscriptionUpdater {
             return
         }
 
-        // Base initial delay on the last successful update time persisted in subscription.
         val intervalMillis = intervalMinutes * 60 * 1000L
         val now = System.currentTimeMillis()
         val initialDelayMillis = if (lastUpdated <= 0L) {
@@ -162,10 +153,6 @@ object SubscriptionUpdater {
                 "initialDelay=${initialDelayMillis / 1000}s policy=$existingWorkPolicy"
         )
     }
-
-    // -------------------------------------------------------------------------
-    // Worker
-    // -------------------------------------------------------------------------
 
     private const val KEY_SUB_ID = "subId"
 
@@ -222,12 +209,12 @@ object SubscriptionUpdater {
             }
 
             val sub = SubscriptionCache(subId, subItem)
-
             notificationManager.notify(3, notification.build())
             LogUtil.i(AppConfig.TAG, "SubscriptionUpdater automatic update: ---${sub.subscription.remarks}")
+            
             AngConfigManager.updateConfigViaSub(sub)
+            
             notification.setContentText("Updating ${sub.subscription.remarks}")
-
             notificationManager.cancel(3)
             return Result.success()
         }

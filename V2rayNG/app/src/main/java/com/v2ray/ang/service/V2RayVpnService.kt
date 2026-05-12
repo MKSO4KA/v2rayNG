@@ -27,6 +27,12 @@ import com.v2ray.ang.handler.V2RayServiceManager
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.MyContextWrapper
 import com.v2ray.ang.util.Utils
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.lang.ref.SoftReference
 
 @SuppressLint("VpnServicePolicy")
@@ -34,6 +40,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
     private lateinit var mInterface: ParcelFileDescriptor
     private var isRunning = false
     private var tun2SocksService: Tun2SocksControl? = null
+    private var watchdogJob: Job? = null
 
     @delegate:RequiresApi(Build.VERSION_CODES.P)
     private val defaultNetworkRequest by lazy {
@@ -103,10 +110,68 @@ class V2RayVpnService : VpnService(), ServiceControl {
             stopAllService()
             return
         }
+        startWatchdog()
     }
 
     override fun stopService() {
+        stopWatchdog()
         stopAllService(true)
+    }
+
+    fun softRestart() {
+        CoroutineScope(Dispatchers.IO).launch {
+            LogUtil.i(AppConfig.TAG, "Watchdog: Soft restarting core...")
+            tun2SocksService?.stopTun2Socks()
+            V2RayServiceManager.stopCoreLoop()
+            delay(1000)
+            if (::mInterface.isInitialized) {
+                V2RayServiceManager.startCoreLoop(mInterface)
+                runTun2socks()
+            }
+        }
+    }
+
+    private fun startWatchdog() {
+        stopWatchdog()
+        watchdogJob = CoroutineScope(Dispatchers.IO).launch {
+            var failCount = 0
+            while (isActive) {
+                delay(300_000) // 5 minutes
+                if (!V2RayServiceManager.isRunning()) continue
+
+                if (!checkSystemInternet()) {
+                    failCount = 0
+                    continue
+                }
+
+                val delayTime = V2RayServiceManager.getCoreDelay()
+                if (delayTime < 0) {
+                    failCount++
+                    LogUtil.w(AppConfig.TAG, "Watchdog: Ping failed, count = $failCount")
+                    if (failCount >= 3) {
+                        LogUtil.w(AppConfig.TAG, "Watchdog: Restarting core due to 3 consecutive failures")
+                        softRestart()
+                        failCount = 0
+                    }
+                } else {
+                    failCount = 0
+                }
+            }
+        }
+    }
+
+    private fun stopWatchdog() {
+        watchdogJob?.cancel()
+        watchdogJob = null
+    }
+
+    private fun checkSystemInternet(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val nw = connectivity.activeNetwork ?: return false
+            val actNw = connectivity.getNetworkCapabilities(nw) ?: return false
+            return actNw.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        }
+        return true
     }
 
     override fun vpnProtect(socket: Int): Boolean {
@@ -269,3 +334,4 @@ class V2RayVpnService : VpnService(), ServiceControl {
         }
     }
 }
+

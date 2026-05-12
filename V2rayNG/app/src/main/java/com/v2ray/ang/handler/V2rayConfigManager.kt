@@ -34,6 +34,7 @@ import com.v2ray.ang.util.Utils
 object V2rayConfigManager {
     private var initConfigCache: String? = null
     private var initConfigCacheWithTun: String? = null
+    var groupTagMap = mutableMapOf<String, String>()
 
     fun getV2rayConfig(context: Context, guid: String): ConfigResult {
         try {
@@ -193,7 +194,8 @@ object V2rayConfigManager {
         }
 
         val v2rayConfig = initV2rayConfig(context) ?: return null
-        v2rayConfig.log.loglevel = MmkvManager.decodeSettingsString(AppConfig.PREF_LOGLEVEL) ?: "warning"
+        val userLogLevel = MmkvManager.decodeSettingsString(AppConfig.PREF_LOGLEVEL) ?: "warning"
+        v2rayConfig.log.loglevel = if (userLogLevel in listOf("warning", "error", "none")) "info" else userLogLevel
         v2rayConfig.remarks = config.remarks
 
         getInbounds(v2rayConfig)
@@ -202,6 +204,8 @@ object V2rayConfigManager {
         val outboundsList = mutableListOf<OutboundBean>()
         val extractedRules = mutableListOf<RulesBean>()
         var index = 0
+        
+        groupTagMap.clear()
         
         for ((guid, configItem) in validConfigs) {
             index++
@@ -214,6 +218,7 @@ object V2rayConfigManager {
             
             val newTag = "proxy-$index"
             outbound.tag = newTag
+            groupTagMap[newTag] = guid
             outboundsList.add(outbound)
 
             // For CUSTOM configs, extract their routing rules and hoist them
@@ -854,6 +859,11 @@ object V2rayConfigManager {
             }
 
             val lstSelector = listOf("proxy-")
+            
+            val interval = config.policyGroupInterval ?: "1m"
+            val toleranceStr = config.policyGroupTolerance?.toString() ?: "0.0"
+            LogUtil.i(AppConfig.TAG, "Configuring Balancer with Strategy: ${config.policyGroupType ?: "leastPing"}, Interval: $interval, Tolerance: $toleranceStr")
+
             when (config.policyGroupType) {
                 "1" -> {
                     val balancer = V2rayConfig.RoutingBean.BalancerBean(
@@ -868,9 +878,9 @@ object V2rayConfigManager {
                         subjectSelector = lstSelector,
                         pingConfig = V2rayConfig.BurstObservatoryObject.PingConfigObject(
                             destination = MmkvManager.decodeSettingsString(AppConfig.PREF_DELAY_TEST_URL) ?: AppConfig.DELAY_TEST_URL,
-                            interval = config.policyGroupInterval ?: "5m",
+                            interval = interval,
                             sampling = 2,
-                            timeout = "30s"
+                            timeout = "10s"
                         )
                     )
                 }
@@ -912,7 +922,7 @@ object V2rayConfigManager {
                     v2rayConfig.observatory = V2rayConfig.ObservatoryObject(
                         subjectSelector = lstSelector,
                         probeUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_DELAY_TEST_URL) ?: AppConfig.DELAY_TEST_URL,
-                        probeInterval = config.policyGroupInterval ?: "3m",
+                        probeInterval = interval,
                         enableConcurrency = true
                     )
                 }

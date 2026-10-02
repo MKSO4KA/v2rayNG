@@ -17,11 +17,12 @@ object ProfileEditorResult {
     const val ACTION_SAVED = "saved"
     const val ACTION_DELETED = "deleted"
 
-    fun Activity.finishSaved(
+    fun finishSaved(
+        activity: Activity,
         guid: String,
         restartService: Boolean
     ) {
-        setResult(
+        activity.setResult(
             Activity.RESULT_OK,
             Intent().apply {
                 putExtra(EXTRA_ACTION, ACTION_SAVED)
@@ -29,11 +30,11 @@ object ProfileEditorResult {
                 putExtra(EXTRA_RESTART_SERVICE, restartService)
             }
         )
-        finish()
+        activity.finish()
     }
 
-    fun Activity.finishDeleted(guid: String) {
-        setResult(
+    fun finishDeleted(activity: Activity, guid: String) {
+        activity.setResult(
             Activity.RESULT_OK,
             Intent().apply {
                 putExtra(EXTRA_ACTION, ACTION_DELETED)
@@ -41,6 +42,6 @@ object ProfileEditorResult {
                 putExtra(EXTRA_RESTART_SERVICE, false)
             }
         )
-        finish()
+        activity.finish()
     }
 }

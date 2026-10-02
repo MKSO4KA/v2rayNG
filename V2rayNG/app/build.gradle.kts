@@ -147,7 +147,11 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
+        resources {
+            excludes += listOf("**/*.dat")
+        }
     }
+
 
     testOptions {
         unitTests.all {

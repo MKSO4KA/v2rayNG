@@ -14,9 +14,7 @@ enum class EConfigType(val value: Int, val protocolScheme: String) {
     //    TUIC(8, AppConfig.TUIC),
     HYSTERIA2(9, AppConfig.HYSTERIA2),
     HYSTERIA(900, AppConfig.HYSTERIA),
-    HTTP(10, AppConfig.HTTP),
-    POLICYGROUP(101, AppConfig.CUSTOM),
-    PROXYCHAIN(102, AppConfig.CUSTOM);
+    HTTP(10, AppConfig.HTTP);
 
     companion object {
         fun fromInt(value: Int) = entries.firstOrNull { it.value == value }

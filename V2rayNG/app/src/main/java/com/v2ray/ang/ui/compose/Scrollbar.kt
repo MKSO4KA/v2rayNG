@@ -52,7 +52,7 @@ private fun <T> rememberScrollbarAlpha(
     val lifecycleState = LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     LaunchedEffect(key, config.fadeOutDurationMs, config.fadeAnimDurationMs) {
         snapshotFlow(position).collectLatest {
-            alpha.snapTo(1f)
+            if (alpha.value < 1f) alpha.snapTo(1f)
             delay(config.fadeOutDurationMs.toLong())
             alpha.animateTo(0f, tween(config.fadeAnimDurationMs))
         }

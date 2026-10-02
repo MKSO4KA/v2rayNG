@@ -10,8 +10,6 @@ object AppConfig {
     /** Directory names used in the app's file system. */
     const val DIR_ASSETS = "assets"
 
-    const val WEBDAV_BACKUP_DIR = "backups"
-    const val WEBDAV_BACKUP_FILE_NAME = "backup_ng.zip"
 
     /** Legacy configuration keys. */
     const val ANG_CONFIG = "ang_config"
@@ -22,9 +20,6 @@ object AppConfig {
     /** Preferences mapped to MMKV storage. */
     const val PREF_SNIFFING_ENABLED = "pref_sniffing_enabled"
     const val PREF_ROUTE_ONLY_ENABLED = "pref_route_only_enabled"
-    const val PREF_PER_APP_PROXY = "pref_per_app_proxy"
-    const val PREF_PER_APP_PROXY_SET = "pref_per_app_proxy_set"
-    const val PREF_BYPASS_APPS = "pref_bypass_apps"
     const val PREF_LOCAL_DNS_ENABLED = "pref_local_dns_enabled"
     const val PREF_FAKE_DNS_ENABLED = "pref_fake_dns_enabled"
     const val PREF_APPEND_HTTP_PROXY = "pref_append_http_proxy"
@@ -33,22 +28,6 @@ object AppConfig {
     const val PREF_VPN_BYPASS_LAN = "pref_vpn_bypass_lan"
     const val PREF_VPN_INTERFACE_ADDRESS_CONFIG_INDEX = "pref_vpn_interface_address_config_index"
     const val PREF_VPN_MTU = "pref_vpn_mtu"
-    const val PREF_ROUTING_DOMAIN_STRATEGY = "pref_routing_domain_strategy"
-    const val PREF_ROUTING_RULESET = "pref_routing_ruleset"
-    const val PREF_MUX_ENABLED = "pref_mux_enabled"
-    const val PREF_MUX_CONCURRENCY = "pref_mux_concurrency"
-    const val PREF_MUX_XUDP_CONCURRENCY = "pref_mux_xudp_concurrency"
-    const val PREF_MUX_XUDP_QUIC = "pref_mux_xudp_quic"
-    const val PREF_FRAGMENT_ENABLED = "pref_fragment_enabled"
-    const val PREF_FRAGMENT_PACKETS = "pref_fragment_packets"
-    const val PREF_FRAGMENT_LENGTH = "pref_fragment_length"
-    const val PREF_FRAGMENT_INTERVAL = "pref_fragment_interval"
-    const val PREF_FRAGMENT_MAXSPLIT = "pref_fragment_maxsplit"
-    const val PREF_OBSERVATORY_LEAST_PING_INTERVAL = "pref_observatory_least_ping_interval"
-    const val PREF_OBSERVATORY_LEAST_LOAD_INTERVAL = "pref_observatory_least_load_interval"
-    const val PREF_OBSERVATORY_LEAST_LOAD_METHOD = "pref_observatory_least_load_method"
-    const val PREF_OBSERVATORY_LEAST_LOAD_SAMPLING = "pref_observatory_least_load_sampling"
-    const val PREF_OBSERVATORY_LEAST_LOAD_TIMEOUT = "pref_observatory_least_load_timeout"
     const val SUBSCRIPTION_UPDATE_TASK_NAME = "subscription_updater"
     const val SUBSCRIPTION_MIN_INTERVAL_MINUTES = 15L
     const val PREF_SPEED_ENABLED = "pref_speed_enabled"
@@ -76,11 +55,7 @@ object AppConfig {
     const val PREF_LOGLEVEL = "pref_core_loglevel"
     const val PREF_OUTBOUND_DOMAIN_RESOLVE_METHOD = "pref_outbound_domain_resolve_method"
     const val PREF_MODE = "pref_mode"
-    const val PREF_ROOT_MODE_ENABLE = "pref_root_mode_enabled"
-    const val PREF_ROOT_LAN_SHARING = "pref_root_lan_sharing"
     const val PREF_IS_BOOTED = "pref_is_booted"
-    const val PREF_CHECK_UPDATE_PRE_RELEASE = "pref_check_update_pre_release"
-    const val PREF_GEO_FILES_SOURCES = "pref_geo_files_sources"
     const val PREF_USE_HEV_TUNNEL = "pref_use_hev_tunnel_v2"
     const val PREF_HEV_TUNNEL_LOGLEVEL = "pref_hev_tunnel_loglevel"
     const val PREF_HEV_TUNNEL_RW_TIMEOUT = "pref_hev_tunnel_rw_timeout_v2"
@@ -99,24 +74,14 @@ object AppConfig {
     /** Broadcast actions. */
     const val BROADCAST_ACTION_SERVICE = "$ANG_PACKAGE.action.service"
     const val BROADCAST_ACTION_ACTIVITY = "$ANG_PACKAGE.action.activity"
-    const val BROADCAST_ACTION_WIDGET_CLICK = "$ANG_PACKAGE.action.widget.click"
 
-    /** Tasker extras. */
-    const val TASKER_EXTRA_BUNDLE = "com.twofortyfouram.locale.intent.extra.BUNDLE"
-    const val TASKER_EXTRA_STRING_BLURB = "com.twofortyfouram.locale.intent.extra.BLURB"
-    const val TASKER_EXTRA_BUNDLE_SWITCH = "tasker_extra_bundle_switch"
-    const val TASKER_EXTRA_BUNDLE_GUID = "tasker_extra_bundle_guid"
-    const val TASKER_DEFAULT_GUID = "Default"
 
     /** Tags for different proxy modes. */
     const val TAG_PROXY = "proxy"
     const val TAG_DIRECT = "direct"
     const val TAG_BLOCKED = "block"
-    const val TAG_FRAGMENT = "fragment"
     const val TAG_DNS = "dns-module"
     const val TAG_DOMESTIC_DNS = "domestic-dns"
-    const val TAG_BALANCER = "balancer-main"
-    const val TAG_BALANCER_PRE = "balancer"
 
     /** Network-related constants. */
     const val UPLINK = "uplink"
@@ -126,7 +91,6 @@ object AppConfig {
     const val GITHUB_URL = "https://github.com"
     const val GITHUB_RAW_URL = "https://raw.githubusercontent.com"
     const val GITHUB_DOWNLOAD_URL = "$GITHUB_URL/%s/releases/latest/download"
-    const val ANDROID_PACKAGE_NAME_LIST_URL = "$GITHUB_RAW_URL/2dust/androidpackagenamelist/master/proxy.txt"
     const val APP_URL = "$GITHUB_URL/2dust/v2rayNG"
     const val APP_API_URL = "https://api.github.com/repos/2dust/v2rayNG/releases"
     const val APP_ISSUES_URL = "$APP_URL/issues"
@@ -136,11 +100,6 @@ object AppConfig {
     const val TG_CHANNEL_URL = "https://t.me/github_2dust"
     const val DELAY_TEST_URL = "https://www.gstatic.com/generate_204"
     const val DELAY_TEST_URL2 = "https://www.google.com/generate_204"
-    const val OBSERVATORY_LEAST_PING_INTERVAL = "3m"
-    const val OBSERVATORY_LEAST_LOAD_INTERVAL = "5m"
-    const val OBSERVATORY_LEAST_LOAD_METHOD = "HEAD"
-    const val OBSERVATORY_LEAST_LOAD_SAMPLING = "2"
-    const val OBSERVATORY_LEAST_LOAD_TIMEOUT = "30s"
 
     //    const val IP_API_URL = "https://speed.cloudflare.com/meta"
     const val IP_API_URL = "https://api.ip.sb/geoip"
@@ -158,7 +117,6 @@ object AppConfig {
     const val GEOSITE_DAT = "geosite.dat"
     const val GEOIP_DAT = "geoip.dat"
     const val GEOIP_ONLY_CN_PRIVATE_DAT = "geoip-only-cn-private.dat"
-    const val GEOIP_ONLY_CN_PRIVATE_URL = "$GITHUB_RAW_URL/Loyalsoldier/geoip/release/$GEOIP_ONLY_CN_PRIVATE_DAT"
 
     /** Ports and addresses for various services. */
     const val PORT_LOCAL_DNS = "10853"
@@ -174,7 +132,6 @@ object AppConfig {
     const val DEFAULT_OUTBOUND_DOMAIN_RESOLVE_METHOD = "1"
     const val DEFAULT_VPN_BYPASS_LAN = "1"
     const val DEFAULT_HEV_TUNNEL_LOGLEVEL = "warn"
-    const val DEFAULT_MUX_XUDP_CONCURRENCY = "8"
 
     /** Message constants for communication. */
     const val MSG_REGISTER_CLIENT = 1
@@ -224,27 +181,6 @@ object AppConfig {
     const val VPN = "VPN"
     const val VPN_MTU = 1500
 
-    /** Root (system-wide) mode runtime constants. */
-    const val ROOT_RUNTIME_DIR = "sys_cache"
-    const val ROOT_IPTABLES_CHAIN = "CORE_FILTER"
-    const val ROOT_FWMARK = 255            // defensive RETURN tag; hev's only upstream socket is loopback (already bypassed)
-    const val ROOT_MARK_ROUTE = 1          // packets we want pushed into the tun device
-    const val ROOT_ROUTE_TABLE = 2024
-    const val ROOT_RULE_PRIORITY = 1000
-    const val ROOT_TUN_NAME = "utun7788"
-    const val ROOT_TUN_ADDR_V4 = "198.18.0.1/15"
-    const val ROOT_TUN_ADDR_V6 = "fdfe:dcba:9876::1/64"
-
-    // hev-socks5-tunnel run as a standalone root binary (reuses the same project already
-    // bundled for the VPN hev path; distinct filename from the JNI lib to avoid collision).
-    const val ROOT_TUN2SOCKS_BIN = "libhevsockstun.so"
-    const val ROOT_FWD_CHAIN = "CORE_FWD"   // FORWARD chain for LAN/tethering sharing
-    const val ROOT_DNS_CHAIN = "CORE_DNS"   // nat chain for tethered-client DNS DNAT
-    const val ROOT_V6_CHAIN = "CORE6_FILTER"       // ip6tables filter/OUTPUT chain: blackhole native IPv6 when it isn't tunneled
-    const val ROOT_V6_FWD_CHAIN = "CORE6_FWD" // ip6tables FORWARD chain: route or reject tethered clients' native IPv6
-    const val ROOT_V6_PRE_CHAIN = "CORE6_PRE" // ip6tables mangle/PREROUTING chain: mark forwarded clients' IPv6 into the tun
-    const val ROOT_LAN_DNS = "1.1.1.1"          // fallback resolver for tethered clients when no plain-IPv4 DNS is configured
-    const val ROOT_OOM_SCORE = "-1000"          // oom_score_adj that makes the LMK never kill us
 
     /** hev-sock5-tunnel read-write-timeout value */
     const val HEVTUN_RW_TIMEOUT = "300,60"
@@ -332,24 +268,20 @@ object AppConfig {
     val PRIVATE_IP_LIST = arrayListOf(
         "0.0.0.0/8",
         "10.0.0.0/8",
+        "100.64.0.0/10",
         "127.0.0.0/8",
+        "169.254.0.0/16",
         "172.16.0.0/12",
         "192.168.0.0/16",
-        "169.254.0.0/16",
-        "224.0.0.0/4"
+        "198.18.0.0/15",
+        "224.0.0.0/4",
+        "240.0.0.0/4",
+        "::1/128",
+        "fc00::/7",
+        "fe80::/10",
+        "ff00::/8"
     )
 
-    val GEO_FILES_SOURCES = arrayListOf(
-        "Loyalsoldier/v2ray-rules-dat",
-        "runetfreedom/russia-v2ray-rules-dat",
-        "Chocolate4U/Iran-v2ray-rules"
-    )
 
-    val BUILTIN_OUTBOUND_TAGS = setOf(
-        TAG_PROXY,
-        TAG_DIRECT,
-        TAG_BLOCKED,
-    )
 
-    val OBSERVATORY_DURATION_PATTERN = Regex("""[1-9]\d*(ms|s|m|h)""")
 }

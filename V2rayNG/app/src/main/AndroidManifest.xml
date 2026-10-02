@@ -23,10 +23,6 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
-    <!-- https://developer.android.com/about/versions/11/privacy/package-visibility -->
-    <uses-permission
-        android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="PackageVisibilityPolicy,QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
@@ -37,7 +33,6 @@
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"
         android:minSdkVersion="34" />
-    <!-- <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" /> -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -74,10 +69,6 @@
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
             </intent-filter>
-
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity>
         <activity
             android:name=".ui.server.ServerVmessActivity"
@@ -116,71 +107,18 @@
             android:exported="false"
             android:windowSoftInputMode="stateUnchanged|adjustResize" />
         <activity
-            android:name=".ui.server.ServerGroupActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
-            android:name=".ui.server.ServerProxyChainActivity"
-            android:exported="false"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
-        <activity
             android:name=".ui.settings.SettingsActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.perappproxy.PerAppProxyActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.apppicker.AppPickerActivity"
             android:exported="false" />
         <activity
             android:name=".ui.ScannerActivity"
             android:exported="false" />
         <activity
-            android:name=".ui.logcat.LogcatActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.routing.RoutingSettingActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.routing.RoutingEditActivity"
-            android:windowSoftInputMode="stateUnchanged|adjustResize"
-            android:exported="false" />
-        <activity
             android:name=".ui.subscription.SubSettingActivity"
             android:exported="false" />
-        <activity
-            android:name=".ui.userasset.UserAssetActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.userasset.UserAssetUrlActivity"
-            android:windowSoftInputMode="stateUnchanged|adjustResize"
-            android:exported="false" />
-
         <activity
             android:name=".ui.subscription.SubEditActivity"
             android:windowSoftInputMode="stateUnchanged|adjustResize"
             android:exported="false" />
-        <activity
-            android:name=".ui.shortcut.ScScannerActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.shortcut.ScSwitchActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:process=":daemon"
-            android:theme="@style/AppThemeDayNight.NoActionBar.Translucent" />
-        <activity
-            android:name=".ui.shortcut.ScStartActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:process=":daemon"
-            android:theme="@style/AppThemeDayNight.NoActionBar.Translucent" />
-        <activity
-            android:name=".ui.shortcut.ScStopActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:process=":daemon"
-            android:theme="@style/AppThemeDayNight.NoActionBar.Translucent" />
 
         <activity
             android:name=".ui.UrlSchemeActivity"
@@ -202,16 +140,7 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".ui.checkupdate.CheckUpdateActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.backup.BackupActivity"
-            android:exported="false" />
-        <activity
             android:name=".ui.AboutActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.TranslatorsActivity"
             android:exported="false" />
 
         <service
@@ -246,20 +175,10 @@
         </service>
 
         <service
-            android:name=".service.CoreRootService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse"
-            android:label="@string/app_name"
-            android:process=":daemon">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="proxy" />
-        </service>
-
-        <service
             android:name=".service.CoreTestService"
             android:exported="false"
             android:foregroundServiceType="specialUse"
+            android:label="@string/app_name"
             android:process=":tasks">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
@@ -270,25 +189,13 @@
             android:name=".service.SubscriptionUpdateService"
             android:exported="false"
             android:foregroundServiceType="specialUse"
+            android:label="@string/app_name"
             android:process=":tasks">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="test" />
         </service>
 
-        <receiver
-            android:name=".receiver.WidgetProvider"
-            android:exported="true"
-            android:process=":daemon">
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/app_widget_provider" />
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="${applicationId}.action.widget.click" />
-                <action android:name="${applicationId}.action.activity" />
-            </intent-filter>
-        </receiver>
         <receiver
             android:name=".receiver.BootReceiver"
             android:exported="true"
@@ -315,26 +222,6 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="tile" />
         </service>
-        <!-- =====================Tasker===================== -->
-        <activity
-            android:name=".ui.shortcut.TaskerActivity"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher">
-            <intent-filter>
-                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
-            </intent-filter>
-        </activity>
-
-        <receiver
-            android:name=".receiver.TaskerReceiver"
-            android:exported="true"
-            android:process=":daemon"
-            tools:ignore="ExportedReceiver">
-            <intent-filter>
-                <action android:name="com.twofortyfouram.locale.intent.action.FIRE_SETTING" />
-            </intent-filter>
-        </receiver>
-        <!-- =====================Tasker===================== -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"

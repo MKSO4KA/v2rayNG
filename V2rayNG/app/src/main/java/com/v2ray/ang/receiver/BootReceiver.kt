@@ -45,7 +45,7 @@ class BootReceiver : BroadcastReceiver() {
             }
         }
 
-        if (!MmkvManager.decodeStartOnBoot()) {
+        if (!MmkvManager.decodeSettingsBool(AppConfig.PREF_IS_BOOTED, false)) {
             LogUtil.i(AppConfig.TAG, "BootReceiver: Auto-start on boot is disabled")
             return
         }

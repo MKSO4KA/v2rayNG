@@ -125,14 +125,14 @@ private fun SettingsItemRow(
 
 @Composable
 fun SettingsEditItem(
-    icon: Painter? = null,
     title: String,
     value: String,
     onValueChanged: (String) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     isPassword: Boolean = false,
-    keyboardNumber: Boolean = false
+    keyboardNumber: Boolean = false,
+    icon: Painter? = null
 ) {
     var showDialog by remember { mutableStateOf(false) }
     val description = if (isPassword) {
@@ -174,14 +174,14 @@ fun SettingsEditItem(
 
 @Composable
 fun SettingsListItem(
-    icon: Painter? = null,
     title: String,
     entries: List<String>,
     values: List<String>,
     selectedValue: String,
     onSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    icon: Painter? = null
 ) {
     var showDialog by remember { mutableStateOf(false) }
     val options = entries.zip(values)
@@ -217,11 +217,11 @@ fun SettingsListItem(
 
 @Composable
 fun SettingsMenuItem(
-    icon: Painter? = null,
     title: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    subtitle: String? = null
+    subtitle: String? = null,
+    icon: Painter? = null
 ) {
     SettingsItemRow(
         icon = icon,
@@ -235,13 +235,13 @@ fun SettingsMenuItem(
 
 @Composable
 fun SettingsSwitchItem(
-    icon: Painter? = null,
     title: String,
     summary: String? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    icon: Painter? = null
 ) {
     SettingsItemRow(
         icon = icon,

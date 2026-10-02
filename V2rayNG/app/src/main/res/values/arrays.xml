@@ -52,28 +52,13 @@
         <!--Hide this option until core support it       <item>guna</item>-->
     </string-array>
 
-    <string-array name="streamsecuritys" translatable="false">
-        <item />
-        <item>tls</item>
-    </string-array>
     <string-array name="streamsecurityxs" translatable="false">
         <item />
         <item>tls</item>
         <item>reality</item>
     </string-array>
 
-    <string-array name="fragment_packets" translatable="false">
-        <item>tlshello</item>
-        <item>1-1</item>
-        <item>1-2</item>
-        <item>1-3</item>
-        <item>1-5</item>
-    </string-array>
 
-    <string-array name="observatory_least_load_method" translatable="false">
-        <item>HEAD</item>
-        <item>GET</item>
-    </string-array>
 
     <string-array name="streamsecurity_utls" translatable="false">
         <item />
@@ -164,11 +149,6 @@
         <item>bqi-rIR</item>
     </string-array>
 
-    <string-array name="mux_xudp_quic_value" translatable="false">
-        <item>reject</item>
-        <item>allow</item>
-        <item>skip</item>
-    </string-array>
 
     <string-array name="ui_mode_night_value" translatable="false">
         <item>0</item>

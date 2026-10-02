@@ -28,18 +28,6 @@ fun String.toLongEx(): Long = toLongOrNull() ?: 0
  */
 fun CharSequence?.isNotNullEmpty(): Boolean = !this.isNullOrBlank()
 
-fun String.concatUrl(vararg paths: String): String {
-    val builder = StringBuilder(this.trimEnd('/'))
-
-    paths.forEach { path ->
-        val trimmedPath = path.trim('/')
-        if (trimmedPath.isNotEmpty()) {
-            builder.append('/').append(trimmedPath)
-        }
-    }
-
-    return builder.toString()
-}
 
 /**
  * Helper function to match text either by Regex or literal string.

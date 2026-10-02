@@ -57,8 +57,6 @@ class SubEditActivity : BaseComponentActivity() {
         suggestions = SettingsManager.getProfileRemarks(
             excludeConfigTypes = setOf(
                 EConfigType.CUSTOM,
-                EConfigType.POLICYGROUP,
-                EConfigType.PROXYCHAIN,
             )
         )
         subItem = MmkvManager.decodeSubscription(editSubId) ?: SubscriptionItem()

@@ -1,7 +1,6 @@
 package com.v2ray.ang.dto
 
 import com.v2ray.ang.dto.entities.ProfileItem
-import com.v2ray.ang.enums.BalancerStrategyType
 import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.enums.NetworkType
 
@@ -88,8 +87,6 @@ data class V2rayNShareItem(
             // 8 -> EConfigType.TUIC
             9 -> EConfigType.WIREGUARD
             10 -> EConfigType.HTTP
-            101 -> EConfigType.POLICYGROUP
-            102 -> EConfigType.PROXYCHAIN
             else -> error("Unknown ConfigType: $ConfigType")
         }
         val network = if (configType == EConfigType.HYSTERIA2) "hysteria" else
@@ -149,16 +146,6 @@ data class V2rayNShareItem(
             portHoppingInterval = ProtoExtraObj?.HopInterval,
             bandwidthDown = ProtoExtraObj?.DownMbps?.takeIf { it > 0 }?.let { "${it}Mbps" },
             bandwidthUp = ProtoExtraObj?.UpMbps?.takeIf { it > 0 }?.let { "${it}Mbps" },
-            policyGroupType = when (ProtoExtraObj?.MultipleLoad) {
-                2 -> BalancerStrategyType.RANDOM.policyGroupType
-                3 -> BalancerStrategyType.ROUND_ROBIN.policyGroupType
-                4 -> BalancerStrategyType.LEAST_LOAD.policyGroupType
-                else -> BalancerStrategyType.LEAST_PING.policyGroupType
-            },
-            // NOTE: not safe, suggest converting and rewriting
-            // policyGroupSubscriptionId = ProtoExtraObj?.SubChildItems,
-            policyGroupSubscriptionId = if (ProtoExtraObj?.SubChildItems == "self") "self" else null,
-            policyGroupFilter = ProtoExtraObj?.Filter,
             // NOTE: proxyChainProfiles stores remarks, not IndexId
             // proxyChainProfiles = ProtoExtraObj?.ChildItems,
         )

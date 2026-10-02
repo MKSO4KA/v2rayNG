@@ -60,22 +60,14 @@ inline fun <reified T : Serializable> Intent.serializable(key: String): T? = whe
     else -> @Suppress("DEPRECATION") getSerializableExtra(key) as? T
 }
 
-/**
- * Checks if the config type is a group type (PolicyGroup or ProxyChain).
- *
- * @return True if the config type is PolicyGroup or ProxyChain, false otherwise.
- */
-fun EConfigType.isGroupType(): Boolean {
-    return this == EConfigType.POLICYGROUP || this == EConfigType.PROXYCHAIN
-}
 
 /**
- * Checks if the config type is a complex type (Custom, PolicyGroup, or ProxyChain).
+ * Checks if the config type is a complex type (Custom).
  *
- * @return True if the config type is Custom, PolicyGroup, or ProxyChain, false otherwise.
+ * @return True if the config type is Custom, false otherwise.
  */
 fun EConfigType.isComplexType(): Boolean {
-    return this == EConfigType.CUSTOM || this == EConfigType.POLICYGROUP || this == EConfigType.PROXYCHAIN
+    return this == EConfigType.CUSTOM
 }
 
 /**

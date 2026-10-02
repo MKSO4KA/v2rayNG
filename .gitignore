@@ -67,3 +67,23 @@ V2rayNG/app/google-services.json
 # Ignore OS-specific files
 Thumbs.db
 .DS_Store
+
+# ==========================================
+# Native modules & Submodules (Xray & Tunnel)
+# ==========================================
+AndroidLibXrayLite/
+hev-socks5-tunnel/
+
+# Native intermediate build artifacts (NDK / Go / Gomobile)
+/libs/
+/obj/
+.gomobile/
+run_gomobile_safe.go
+
+# Конфиги и артефакты контекста
+autoai_extensions.config
+**/autoai_extensions.config
+project_full_source.txt
+**/project_full_source.txt
+extensions.properties
+**/extensions.properties

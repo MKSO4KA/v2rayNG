@@ -146,10 +146,10 @@ check:
 	@echo "Go GOBIN:       `go env GOBIN`"
 
 assets:
-	@echo "[1/4] Preparing Go Core assets (Geo assets excluded)..."
+	@echo "[1/4] Preparing Go Core assets..."
 	@echo "$$GO_SAFE_WRAPPER" > "$(PROJECT_ROOT)/run_gomobile_safe.go"
 	@mkdir -p "$(CORE_SRC_DIR)/data" "$(CORE_SRC_DIR)/assets"
-	@rm -f "$(CORE_SRC_DIR)/assets/"*.dat "$(CORE_SRC_DIR)/data/"*.dat 2>/dev/null || true
+
 
 tunnel:
 	@echo "[2/4] Building Tunnel (C++)..."
@@ -185,8 +185,24 @@ tunnel:
 	fi
 
 core: assets
-	@echo "[3/4] Compiling Go Core (Xray Lite) -> AAR..."
-	@( \
+	@echo "[3/4] Compiling Go Core (Xray Lite) -> AAR (In-flight Isolated Build)..."
+	@(\
+		TEMP_STASH_DIR=$$(mktemp -d 2>/dev/null || mktemp -d -t 'xray_patch'); \
+		cleanup_and_restore() { \
+			echo "=== [FINALLY] Restoring original submodule state ==="; \
+			if [ -d "$$TEMP_STASH_DIR" ]; then \
+				mv -f "$$TEMP_STASH_DIR"/*.dat "$(CORE_SRC_DIR)/assets/" 2>/dev/null || true; \
+				if [ -f "$$TEMP_STASH_DIR/go.mod.bak" ]; then cp -f "$$TEMP_STASH_DIR/go.mod.bak" "$(CORE_SRC_DIR)/go.mod"; fi; \
+				if [ -f "$$TEMP_STASH_DIR/go.sum.bak" ]; then cp -f "$$TEMP_STASH_DIR/go.sum.bak" "$(CORE_SRC_DIR)/go.sum"; fi; \
+				rm -rf "$$TEMP_STASH_DIR"; \
+			fi; \
+			rm -rf "$(CORE_SRC_DIR)/buildtools"; \
+			git -C "$(CORE_SRC_DIR)" checkout -- go.mod go.sum gen_assets.sh 2>/dev/null || true; \
+		}; \
+		trap cleanup_and_restore EXIT INT TERM; \
+		if [ -f "$(CORE_SRC_DIR)/go.mod" ]; then cp -f "$(CORE_SRC_DIR)/go.mod" "$$TEMP_STASH_DIR/go.mod.bak"; fi; \
+		if [ -f "$(CORE_SRC_DIR)/go.sum" ]; then cp -f "$(CORE_SRC_DIR)/go.sum" "$$TEMP_STASH_DIR/go.sum.bak"; fi; \
+		mv -f "$(CORE_SRC_DIR)/assets/"*.dat "$$TEMP_STASH_DIR/" 2>/dev/null || true; \
 		cd $(CORE_SRC_DIR); \
 		go install github.com/sagernet/gomobile/cmd/gomobile@latest; \
 		go install github.com/sagernet/gomobile/cmd/gobind@latest; \
@@ -202,8 +218,8 @@ core: assets
 		go mod tidy; \
 		go run ../run_gomobile_safe.go "$$GOMOBILE_EXE_WIN" init; \
 		go run ../run_gomobile_safe.go "$$GOMOBILE_EXE_WIN" bind -v -androidapi 24 -trimpath -ldflags='-s -w -buildid= -checklinkname=0' -o "libv2ray.aar" ./; \
-		rm -rf buildtools; \
 	)
+
 
 
 

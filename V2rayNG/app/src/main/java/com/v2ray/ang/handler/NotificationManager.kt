@@ -91,9 +91,16 @@ object NotificationManager {
                 ""
             }
 
+        val isSmartPool = com.v2ray.ang.smartpool.SmartPoolManager.isSmartPoolConfig(currentConfig)
+        val titleText = if (isSmartPool) {
+            com.v2ray.ang.smartpool.SmartPoolManager.getNotificationTitle(currentConfig?.remarks ?: service.getString(R.string.app_name))
+        } else {
+            currentConfig?.remarks ?: service.getString(R.string.app_name)
+        }
+
         mBuilder = NotificationCompat.Builder(service, channelId)
             .setSmallIcon(R.drawable.ic_stat_name)
-            .setContentTitle(currentConfig?.remarks ?: service.getString(R.string.app_name))
+            .setContentTitle(titleText)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setShowWhen(false)
@@ -147,6 +154,17 @@ object NotificationManager {
             it.cancel()
             speedNotificationJob = null
             updateNotification("", 0, 0)
+        }
+    }
+
+    /**
+     * Updates notification title dynamically.
+     * @param title The new notification title.
+     */
+    fun updateTitle(title: String) {
+        if (mBuilder != null) {
+            mBuilder?.setContentTitle(title)
+            getNotificationManager()?.notify(NOTIFICATION_ID, mBuilder?.build())
         }
     }
 

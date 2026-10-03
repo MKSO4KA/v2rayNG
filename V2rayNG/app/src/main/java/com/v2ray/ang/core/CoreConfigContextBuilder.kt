@@ -34,6 +34,10 @@ object CoreConfigContextBuilder {
             return CoreConfigContext(context = context, guid = guid, isCustom = true)
         }
 
+        if (config.configType == EConfigType.SMART_POOL) {
+            return com.v2ray.ang.smartpool.SmartPoolConfigBuilder.buildContext(context, guid, config)
+        }
+
         // Step 1: Resolve the main outbound (always tag = TAG_PROXY).
         val primaryResolvedOutbound = resolveOutbound(AppConfig.TAG_PROXY, config) ?: run {
             LogUtil.e(AppConfig.TAG, "Failed to resolve main outbound for '${config.remarks}'")

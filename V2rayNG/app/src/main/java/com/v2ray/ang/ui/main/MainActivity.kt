@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.lifecycleScope
 import com.v2ray.ang.AngApplication
 import com.v2ray.ang.AppConfig
@@ -24,6 +25,8 @@ import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsChangeManager
 import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.smartpool.SmartPoolManager
+import com.v2ray.ang.smartpool.SmartRadarDialog
 import com.v2ray.ang.ui.AboutActivity
 import com.v2ray.ang.ui.base.HelperBaseComponentActivity
 import com.v2ray.ang.ui.server.ProfileEditorResult
@@ -49,6 +52,8 @@ class MainActivity : HelperBaseComponentActivity() {
     private val mainViewModel: MainViewModel by viewModels {
         MainViewModel.Factory(application, MainRepository(application as AngApplication))
     }
+
+    private var showRadarDialog = mutableStateOf(false)
 
     private val requestVpnPermission =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -84,7 +89,9 @@ class MainActivity : HelperBaseComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        SmartPoolManager.ensureDefaultSmartPoolNode()
         mainViewModel.onAction(MainAction.Initialize)
+        mainViewModel.setupGroupTab(true)
 
         checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) {}
     }
@@ -108,11 +115,15 @@ class MainActivity : HelperBaseComponentActivity() {
                     is MainAction.EditServer -> editServer(action.guid, action.profile)
                     is MainAction.ShareClipboard -> shareToClipboard(action.guid)
                     is MainAction.ShareFullContent -> shareFullContentAsync(action.guid)
+                    MainAction.OpenRadar -> showRadarDialog.value = true
                     else -> mainViewModel.onAction(action)
                 }
             },
             onNavigate = { route -> navigateTo(route) },
         )
+        if (showRadarDialog.value) {
+            SmartRadarDialog(onDismiss = { showRadarDialog.value = false })
+        }
     }
 
     private fun shareToClipboard(guid: String): Boolean =

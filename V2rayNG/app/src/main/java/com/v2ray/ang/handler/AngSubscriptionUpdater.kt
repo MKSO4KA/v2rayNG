@@ -40,6 +40,9 @@ object AngSubscriptionUpdater {
         )
         var configText = runCatching { HttpUtil.getUrlContentWithUserAgent(req) }.getOrDefault("")
         if (configText.isEmpty()) {
+            configText = runCatching { com.v2ray.ang.smartpool.SmartSubFetcher.fetchRawContentWithCascade(url) }.getOrDefault("")
+        }
+        if (configText.isEmpty()) {
             configText = runCatching {
                 HttpUtil.getUrlContentWithUserAgent(
                     UrlContentRequest(
@@ -53,6 +56,7 @@ object AngSubscriptionUpdater {
         if (configText.isEmpty()) return SubscriptionUpdateResult(failureCount = 1)
         val count = parseConfigViaSub(configText, it.guid, false)
         return if (count > 0) {
+            com.v2ray.ang.smartpool.SmartPoolManager.onProxiesUpdated(it.guid)
             it.subscription.lastUpdated = System.currentTimeMillis()
             MmkvManager.encodeSubscription(it.guid, it.subscription)
             SubscriptionUpdateResult(configCount = count, successCount = 1)

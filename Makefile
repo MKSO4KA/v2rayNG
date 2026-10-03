@@ -107,7 +107,7 @@ import _ "github.com/sagernet/gomobile/bind"
 endef
 export GO_TOOLS_FILE
 
-.PHONY: all help check tunnel assets core deploy clean
+.PHONY: all help check tunnel assets core deploy clean test
 
 all: check tunnel core deploy
 
@@ -125,6 +125,7 @@ help:
 	@echo "  make release   - Interactive pipeline + build Android Release APK [FLAVOR=fdroid|playstore]"
 	@echo "  make build_all - Fully automated pipeline (alias for 'make all' + 'make release')"
 	@echo "  make diff      - Generate .diff file with your changes [UPSTREAM=upstream] [BRANCH=master]"
+	@echo "  make test      - Run all Android Unit Tests"
 
 check:
 	@echo "=== Environment Check ==="
@@ -235,6 +236,19 @@ deploy:
 	fi
 	@echo "DONE! Artifacts deployed to $(APP_LIBS_DIR)"
 
+test:
+	@echo "=== Running Android Unit Tests ==="
+	@cd "$(PROJECT_ROOT)/V2rayNG" && chmod +x gradlew && ./gradlew test
+
+.PHONY: log
+log:
+	@echo "=== Streaming SmartPool / v2rayNG Logs via ADB ==="
+	@ADB_BIN="$(ANDROID_HOME)/platform-tools/adb.exe"; \
+	if [ ! -f "$$ADB_BIN" ]; then ADB_BIN="adb"; fi; \
+	ADB_TARGET=""; \
+	if [ -n "$(DEVICE)" ]; then ADB_TARGET="-s $(DEVICE)"; fi; \
+	"$$ADB_BIN" $$ADB_TARGET logcat -v time | grep --line-buffered -E "SmartPool|Лидер|Балансировщик|Ротация|Штраф|Кулдаун|Рекрутинг|GoLog|com.v2ray.ang"
+
 clean:
 	@echo "Cleaning build artifacts..."
 	@if [ -n "$(PROJECT_ROOT)" ] && [ "$(PROJECT_ROOT)" != "/" ]; then \
@@ -262,7 +276,7 @@ endif
 .PHONY: interactive_prep debug release build_all
 
 interactive_prep: check
-	@printf "\\nRebuild Tunnel? [y/N]: "; read ans_t; \
+	@printf "\nRebuild Tunnel? [y/N]: "; read ans_t; \
 	if [ "$$ans_t" = "y" ] || [ "$$ans_t" = "Y" ]; then $(MAKE) tunnel; fi
 	@printf "Rebuild Core? [y/N]: "; read ans_c; \
 	if [ "$$ans_c" = "y" ] || [ "$$ans_c" = "Y" ]; then $(MAKE) core; fi
@@ -393,6 +407,7 @@ install:
 			echo "[ERROR] Installation failed. Check device screen for confirmation dialogs."; \
 		fi; \
 	fi
+
 
 
 .PHONY: install-wifi install-v8a

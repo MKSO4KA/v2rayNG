@@ -13,6 +13,7 @@ import com.v2ray.ang.dto.entities.ServersCache
 import com.v2ray.ang.dto.entities.SubscriptionCache
 import com.v2ray.ang.extension.matchesPattern
 import com.v2ray.ang.extension.moveItem
+import com.v2ray.ang.smartpool.SmartPoolManager
 import com.v2ray.ang.ui.base.BaseViewModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -110,7 +111,13 @@ class MainViewModel(application: Application, private val dataSource: MainDataSo
 
     fun onAction(action: MainAction) {
         when (action) {
-            MainAction.Initialize -> viewModelScope.launch(preloadDispatcher) { initialPageReady.await(); delay(32); dataSource.initAssets(); dataSource.syncSubscriptions() }
+            MainAction.Initialize -> viewModelScope.launch(preloadDispatcher) {
+                SmartPoolManager.ensureDefaultSmartPoolNode()
+                initialPageReady.await()
+                delay(32)
+                dataSource.initAssets()
+                dataSource.syncSubscriptions()
+            }
             MainAction.RefreshGroups -> setupGroupTab(forceRefresh = true)
             MainAction.TestAllServers -> testAllRealPing(true)
             MainAction.TestRealAllServers -> testAllRealPing(false)
@@ -119,7 +126,13 @@ class MainViewModel(application: Application, private val dataSource: MainDataSo
             MainAction.RemoveDuplicateServers -> launchLoading { actionHandler.removeDuplicate(uiState.value.selectedGroupId) { setupGroupTab(true) } }
             MainAction.RemoveInvalidServers -> launchLoading { actionHandler.removeInvalid(uiState.value.selectedGroupId) { setupGroupTab(true) } }
             MainAction.SortByTestResults -> launchLoading { actionHandler.sortServers(uiState.value.selectedGroupId) { setupGroupTab(true) } }
-            MainAction.UpdateSubscriptions -> launchLoading { actionHandler.updateSubs(uiState.value.selectedGroupId) { msg, refresh -> toast(msg); if (refresh) setupGroupTab(true) } }
+            MainAction.UpdateSubscriptions -> launchLoading {
+                actionHandler.updateSubs(uiState.value.selectedGroupId) { msg, refresh ->
+                    SmartPoolManager.onProxiesUpdated(uiState.value.selectedGroupId)
+                    toast(msg)
+                    if (refresh) setupGroupTab(true)
+                }
+            }
             is MainAction.SelectGroup -> subscriptionIdChanged(action.groupId)
             is MainAction.SelectServer -> updateSelectedGuid(action.guid)
             is MainAction.RemoveServer -> removeServerAndRefresh(action.guid)

@@ -89,6 +89,7 @@ object CoreServiceManager {
         val result = CoreConfigManager.getV2rayConfig(service, guid)
         if (!result.status) error(result.errorMessage.ifBlank { "Failed to get V2Ray config" })
         currentConfig = config
+        com.v2ray.ang.smartpool.SmartPoolManager.onCoreStarting(service, config)
         var tunFd = if (SettingsManager.isUsingHevTun()) 0 else (vpnInterface?.fd ?: 0)
         val dialerMode = BrowserDialerMode.from(config.browserDialerMode)
         val dialerAddr = if (dialerMode != null) "127.0.0.1:${Utils.findRandomFreePort()}" else ""
@@ -118,6 +119,7 @@ object CoreServiceManager {
                 runCatching { coreController.stopLoop() }.onFailure { LogUtil.e(AppConfig.TAG, "Failed to stop V2Ray loop", it) }
             }
         }
+        com.v2ray.ang.smartpool.SmartPoolManager.stop()
         CoreNativeManager.reconcileBrowserDialer("")
         browserDialer?.stop()
         browserDialer = null

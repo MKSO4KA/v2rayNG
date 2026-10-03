@@ -71,8 +71,8 @@ Thumbs.db
 # ==========================================
 # Native modules & Submodules (Xray & Tunnel)
 # ==========================================
-AndroidLibXrayLite/
-hev-socks5-tunnel/
+#AndroidLibXrayLite/
+#hev-socks5-tunnel/
 
 # Native intermediate build artifacts (NDK / Go / Gomobile)
 /libs/

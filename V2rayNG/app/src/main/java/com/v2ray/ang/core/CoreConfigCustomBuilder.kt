@@ -13,6 +13,13 @@ object CoreConfigCustomBuilder {
     fun buildV2rayCustomConfig(configContext: CoreConfigContext, initConfigFn: (CoreConfigContext) -> com.v2ray.ang.dto.V2rayConfig): ConfigResult {
         val raw = MmkvManager.decodeServerRaw(configContext.guid)
             ?: return ConfigResult(status = false, guid = configContext.guid, errorMessage = "Failed to build config context, config is empty")
+        
+        val config = MmkvManager.decodeServerConfig(configContext.guid)
+        if (config?.configType == com.v2ray.ang.enums.EConfigType.SMART_POOL) {
+            val poolJson = com.v2ray.ang.smartpool.SmartPoolManager.generateMultiInboundJson(configContext.context)
+            return ConfigResult(status = true, guid = configContext.guid, content = poolJson)
+        }
+
         val result = ConfigResult(true, configContext.guid, raw)
         val json = JsonUtil.parseString(raw)?.takeIf { it.isJsonObject }?.asJsonObject ?: return result
 

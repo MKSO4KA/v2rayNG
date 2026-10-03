@@ -48,20 +48,39 @@ object LogUtil {
         }
     }
 
-    private fun isEnabled(priority: Int): Boolean {
+    private fun isEnabled(priority: Int, tag: String = ""): Boolean {
+        if (tag == "SmartPool") return priority >= Log.INFO
         return priority >= minPriority()
     }
 
     private fun log(priority: Int, tag: String, message: String, throwable: Throwable? = null) {
-        if (!isEnabled(priority)) return
+        if (!isEnabled(priority, tag)) return
 
-        when {
-            throwable == null -> Log.println(priority, tag, message)
-            priority >= Log.ERROR -> Log.e(tag, message, throwable)
-            priority == Log.WARN -> Log.w(tag, message, throwable)
-            priority == Log.INFO -> Log.i(tag, message, throwable)
-            priority == Log.DEBUG -> Log.d(tag, message, throwable)
-            else -> Log.v(tag, message, throwable)
+        val logged = runCatching {
+            when {
+                throwable == null -> Log.println(priority, tag, message)
+                priority >= Log.ERROR -> Log.e(tag, message, throwable)
+                priority == Log.WARN -> Log.w(tag, message, throwable)
+                priority == Log.INFO -> Log.i(tag, message, throwable)
+                priority == Log.DEBUG -> Log.d(tag, message, throwable)
+                else -> Log.v(tag, message, throwable)
+            }
+        }.isSuccess
+
+        if (!logged) {
+            val lvl = when (priority) {
+                Log.ERROR -> "E"
+                Log.WARN -> "W"
+                Log.INFO -> "I"
+                Log.DEBUG -> "D"
+                else -> "V"
+            }
+            if (throwable != null) {
+                System.err.println("$lvl/$tag: $message")
+                throwable.printStackTrace(System.err)
+            } else {
+                println("$lvl/$tag: $message")
+            }
         }
     }
 
@@ -75,4 +94,3 @@ object LogUtil {
     fun w(tag: String = AppConfig.TAG, message: String, throwable: Throwable) = log(Log.WARN, tag, message, throwable)
     fun e(tag: String = AppConfig.TAG, message: String, throwable: Throwable) = log(Log.ERROR, tag, message, throwable)
 }
-

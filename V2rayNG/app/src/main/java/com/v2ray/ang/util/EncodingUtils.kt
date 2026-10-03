@@ -35,22 +35,23 @@ object EncodingUtils {
 
     private fun tryDecodeBase64(text: String?): String? {
         if (text.isNullOrEmpty()) return null
-        try {
-            return Base64.decode(text, Base64.NO_WRAP).toString(Charsets.UTF_8)
-        } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "Failed to decode standard base64", e)
-        }
-        try {
-            return Base64.decode(text, Base64.NO_WRAP.or(Base64.URL_SAFE)).toString(Charsets.UTF_8)
-        } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "Failed to decode URL-safe base64", e)
-        }
-        return null
+        val clean = text.trim().replace("\r", "").replace("\n", "")
+        return runCatching {
+            java.util.Base64.getDecoder().decode(clean).toString(Charsets.UTF_8)
+        }.recoverCatching {
+            java.util.Base64.getUrlDecoder().decode(clean).toString(Charsets.UTF_8)
+        }.recoverCatching {
+            Base64.decode(clean, Base64.NO_WRAP).toString(Charsets.UTF_8)
+        }.recoverCatching {
+            Base64.decode(clean, Base64.NO_WRAP.or(Base64.URL_SAFE)).toString(Charsets.UTF_8)
+        }.getOrNull()
     }
 
     fun encode(text: String, removePadding: Boolean = false): String {
         return try {
-            var encoded = Base64.encodeToString(text.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+            val bytes = text.toByteArray(Charsets.UTF_8)
+            var encoded = runCatching { java.util.Base64.getEncoder().encodeToString(bytes) }
+                .getOrElse { Base64.encodeToString(bytes, Base64.NO_WRAP) }
             if (removePadding) encoded = encoded.trimEnd('=')
             encoded
         } catch (e: Exception) {

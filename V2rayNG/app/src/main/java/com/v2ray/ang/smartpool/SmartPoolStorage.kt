@@ -7,6 +7,7 @@ object SmartPoolStorage {
     private val lock = Any()
 
     fun loadHistory(): MutableMap<String, SmartNodeHistory> = synchronized(lock) {
+        if (!MmkvManager.isInitialized) return mutableMapOf()
         val json = MmkvManager.decodeSettingsString(SmartPoolConstants.PREF_NODE_HISTORY)
         if (json.isNullOrBlank()) return mutableMapOf()
         return try {
@@ -17,7 +18,8 @@ object SmartPoolStorage {
         }
     }
 
-    fun saveHistory(historyMap: Map<String, SmartNodeHistory>) = synchronized(lock) {
+    fun saveHistory(historyMap: Map<String, SmartNodeHistory>): Unit = synchronized(lock) {
+        if (!MmkvManager.isInitialized) return
         val now = System.currentTimeMillis()
         val pruned = historyMap.values.filter { !it.isDead(now) }
         MmkvManager.encodeSettings(SmartPoolConstants.PREF_NODE_HISTORY, JsonUtil.toJson(pruned))

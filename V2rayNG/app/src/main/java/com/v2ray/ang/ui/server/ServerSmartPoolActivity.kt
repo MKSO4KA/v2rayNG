@@ -16,6 +16,7 @@ import com.v2ray.ang.extension.toast
 import com.v2ray.ang.extension.toastSuccess
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.smartpool.SmartPoolManager
+import com.v2ray.ang.smartpool.SmartPoolConstants
 import com.v2ray.ang.smartpool.SmartPoolNodeFilter
 import com.v2ray.ang.smartpool.SmartRegexMatcher
 import com.v2ray.ang.ui.base.BaseComponentActivity
@@ -32,15 +33,16 @@ class ServerSmartPoolActivity : BaseComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        SmartPoolManager.ensureSmartPoolGroup()
         initialConfig = MmkvManager.decodeServerConfig(editGuid) ?: ProfileItem.create(EConfigType.SMART_POOL).apply {
-            subscriptionId = currentSubscriptionId
+            subscriptionId = SmartPoolConstants.SMART_POOL_GROUP_ID
         }
     }
 
     @Composable
     override fun ScreenContent() {
         val uiState = remember { SmartPoolUiState.fromProfileItem(initialConfig, currentSubscriptionId) }
-        val allSubs = remember { MmkvManager.decodeSubscriptions() }
+        val allSubs = remember { MmkvManager.decodeSubscriptions().filter { it.guid != SmartPoolConstants.SMART_POOL_GROUP_ID } }
         val subOptions = remember(allSubs) { listOf("Все группы") + allSubs.map { it.subscription.remarks } }
         val allNodes = remember(uiState.targetSubId) {
             val guids = if (uiState.targetSubId.isBlank()) SmartPoolManager.getAllServerGuids() else MmkvManager.decodeServerList(uiState.targetSubId)
@@ -96,10 +98,9 @@ class ServerSmartPoolActivity : BaseComponentActivity() {
     private fun saveSmartPool(state: SmartPoolUiState): Boolean {
         state.isRemarksError = state.remarks.isBlank()
         if (state.isRemarksError) return false
+        SmartPoolManager.ensureSmartPoolGroup()
         val config = state.toProfileItem(initialConfig)
-        if (config.subscriptionId.isBlank() && currentSubscriptionId.isNotBlank()) {
-            config.subscriptionId = currentSubscriptionId
-        }
+        config.subscriptionId = SmartPoolConstants.SMART_POOL_GROUP_ID
         val savedGuid = MmkvManager.encodeServerConfig(editGuid, config)
         SmartPoolManager.onProxiesUpdated(state.targetSubId)
         toastSuccess(R.string.toast_success)

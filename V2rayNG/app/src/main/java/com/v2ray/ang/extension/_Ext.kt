@@ -67,7 +67,7 @@ inline fun <reified T : Serializable> Intent.serializable(key: String): T? = whe
  * @return True if the config type is Custom, false otherwise.
  */
 fun EConfigType.isComplexType(): Boolean {
-    return this == EConfigType.CUSTOM
+    return this == EConfigType.CUSTOM || this == EConfigType.SMART_POOL
 }
 
 /**

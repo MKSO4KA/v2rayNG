@@ -23,7 +23,8 @@ data class SmartNodeState(
     }
 
     fun isDead(now: Long = System.currentTimeMillis()): Boolean {
-        return (now - lastSuccessTime) > SmartPoolConstants.NODE_DEADLINE_MS || failCount >= SmartPoolConstants.MAX_CONSECUTIVE_FAILS
+        // Смерть наступает строго при 24 отказах подряд.
+        return failCount >= SmartPoolConstants.MAX_CONSECUTIVE_FAILS
     }
 
     fun effectiveRTT(baselineMs: Long = 0L): Long {
@@ -75,11 +76,36 @@ class SmartPoolBalancer(
         }
         if (nodes.isNotEmpty()) {
             activeLeader = nodes[0]
-            standbys = nodes.drop(1).take(SmartPoolConstants.STANDBY_CAPACITY).toMutableList()
+            // Standby комплектуется исключительно проверенными нодами (с latency > 0). Непроверенные не добавляются.
+            standbys = nodes.drop(1).filter { it.latencyMs > 0 && it.isAvailable() }.take(SmartPoolConstants.STANDBY_CAPACITY).toMutableList()
         }
     }
 
     fun getCurrentLeader(): SmartNodeState? = synchronized(lock) { activeLeader }
+
+    fun setEarlyLeader(node: SmartNodeState) = synchronized(lock) {
+        node.penalty = 0
+        node.failCount = 0
+        val old = activeLeader
+        activeLeader = node
+        standbys.remove(node)
+        if (old != null && old.localPort != node.localPort && old.isAvailable() && old.latencyMs > 0) {
+            if (standbys.none { it.localPort == old.localPort }) {
+                standbys.add(old)
+            }
+        }
+        onLeaderChanged?.invoke(node)
+    }
+
+    fun addEarlyStandby(node: SmartNodeState) = synchronized(lock) {
+        if (node.localPort == activeLeader?.localPort) return@synchronized
+        if (standbys.any { it.localPort == node.localPort }) return@synchronized
+        if (standbys.size < SmartPoolConstants.STANDBY_CAPACITY) {
+            node.penalty = 0
+            node.failCount = 0
+            standbys.add(node)
+        }
+    }
 
     fun getActiveLeader(): SmartNodeState? {
         var changedLeader: SmartNodeState? = null
@@ -87,6 +113,8 @@ class SmartPoolBalancer(
             if (activeLeader != null && activeLeader!!.isAvailable()) return@synchronized activeLeader
             val standby = standbys.firstOrNull { it.isAvailable() }
             if (standby != null) {
+                standby.penalty = 0
+                standby.failCount = 0
                 activeLeader = standby
                 standbys.remove(standby)
                 changedLeader = standby
@@ -162,11 +190,17 @@ class SmartPoolBalancer(
     fun differentialUpdate(newCandidates: List<ProfileItem>): Boolean = synchronized(lock) {
         val unique = SmartPoolNodeFilter.filterAndDeduplicate(newCandidates)
         val allowedUnique = unique.take(maxPortLimit)
+
+        // Fast path: if hashes unchanged, only update profiles (names) and keep leader/latency
         val newHashes = allowedUnique.map { SmartNodeHasher.computeNodeHash(it) }
         val currentHashes = nodes.map { it.hash }
         if (newHashes == currentHashes) {
-            allowedUnique.forEachIndexed { i, p -> if (i < nodes.size) nodes[i].profile = p }
-            return false
+            allowedUnique.forEachIndexed { i, p ->
+                if (i < nodes.size) {
+                    nodes[i].profile = p
+                }
+            }
+            return@synchronized false
         }
 
         val existingByHash = nodes.associateBy { it.hash }.toMutableMap()
@@ -175,25 +209,78 @@ class SmartPoolBalancer(
         val freePorts = (allValidPorts - usedPorts).toMutableList()
 
         val updatedNodes = mutableListOf<SmartNodeState>()
+        var matchedCount = 0
+        var addedCount = 0
+
         for (profile in allowedUnique) {
             val h = SmartNodeHasher.computeNodeHash(profile)
-            val existing = existingByHash[h]
+            val existing = existingByHash.remove(h)
             if (existing != null) {
                 existing.profile = profile
                 updatedNodes.add(existing)
+                matchedCount++
             } else {
                 val port = if (freePorts.isNotEmpty()) freePorts.removeAt(0) else {
                     val evicted = nodes.minByOrNull { it.healthScore() }
                     evicted?.localPort ?: (SmartPoolConstants.BASE_POOL_PORT + updatedNodes.size)
                 }
                 updatedNodes.add(SmartNodeState(profile = profile, localPort = port, hash = h))
+                addedCount++
+
+                // Подробный лог нового узла с безопасным маскированием токенов
+                val maskedAuth = (profile.password ?: profile.username)?.let {
+                    if (it.length > 8) "${it.take(4)}...${it.takeLast(4)}" else "***"
+                } ?: "none"
+                val transportInfo = buildString {
+                    append(profile.network ?: "tcp")
+                    if (!profile.security.isNullOrBlank()) append("/${profile.security}")
+                    if (!profile.sni.isNullOrBlank()) append(", sni=${profile.sni}")
+                    if (!profile.path.isNullOrBlank()) append(", path=${profile.path}")
+                    if (!profile.flow.isNullOrBlank()) append(", flow=${profile.flow}")
+                }
+                LogUtil.i(
+                    SmartPoolConstants.TAG,
+                    "➕ [Новый узел] '${profile.remarks}' (${profile.server}:${profile.serverPort}, ${profile.configType.name.lowercase()}, port=$port, auth=$maskedAuth, $transportInfo)"
+                )
             }
         }
+
+        // Стакание: ноды, отсутствующие в текущем ответе подписки, сохраняются в пуле, если у них меньше 24 ошибок подряд
+        var retainedCount = 0
+        var prunedDeadCount = 0
+        val now = System.currentTimeMillis()
+        for ((_, remainingNode) in existingByHash) {
+            if (!remainingNode.isDead(now) && updatedNodes.size < maxPortLimit) {
+                updatedNodes.add(remainingNode)
+                retainedCount++
+            } else {
+                prunedDeadCount++
+            }
+        }
+
         nodes.clear()
         nodes.addAll(updatedNodes)
         val survivingLeader = nodes.firstOrNull { it.hash == activeLeader?.hash }
-        activeLeader = if (survivingLeader != null && survivingLeader.isAvailable()) survivingLeader else nodes.firstOrNull { it.isAvailable() }
-        standbys = nodes.filter { it.hash != activeLeader?.hash && it.isAvailable() }.sortedBy { it.effectiveRTT(baselineLatencyMs) }.take(SmartPoolConstants.STANDBY_CAPACITY).toMutableList()
+        activeLeader = when {
+            survivingLeader != null && survivingLeader.isAvailable() -> survivingLeader
+            standbys.isNotEmpty() && standbys.first().isAvailable() -> {
+                val candidate = standbys.removeAt(0)
+                candidate.penalty = 0
+                candidate.failCount = 0
+                candidate
+            }
+            else -> nodes.firstOrNull { it.latencyMs > 0 && it.isAvailable() } ?: nodes.firstOrNull { it.isAvailable() }
+        }
+        standbys = nodes.filter { it.hash != activeLeader?.hash && it.latencyMs > 0 && it.isAvailable() }
+            .sortedBy { it.effectiveRTT(baselineLatencyMs) }
+            .take(SmartPoolConstants.STANDBY_CAPACITY)
+            .toMutableList()
+
+        val leaderName = activeLeader?.profile?.remarks ?: "нет"
+        LogUtil.i(
+            SmartPoolConstants.TAG,
+            "🔍 [Сверка нод] В пуле: ${nodes.size} нод (совпало: $matchedCount, новых: $addedCount, удержано живых: $retainedCount, удалено мертвых: $prunedDeadCount). Лидер: '$leaderName'"
+        )
         true
     }
 
@@ -210,7 +297,12 @@ class SmartPoolBalancer(
         val existingPorts = (listOfNotNull(activeLeader) + standbys).map { it.localPort }.toSet()
         for (cand in recruited) {
             if (standbys.size >= SmartPoolConstants.STANDBY_CAPACITY) break
-            if (cand.localPort !in existingPorts && cand.isAvailable()) standbys.add(cand)
+            // Только проверенные рабочие ноды с подтвержденным latency > 0 допускаются в Standby
+            if (cand.localPort !in existingPorts && cand.isAvailable() && cand.latencyMs > 0) {
+                cand.penalty = 0
+                cand.failCount = 0
+                standbys.add(cand)
+            }
         }
     }
 }

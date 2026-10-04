@@ -11,6 +11,7 @@ object SmartPoolConstants {
     const val TAG_IN_PREFIX = "in-"
     const val TAG_OUT_PREFIX = "out-"
     const val SMART_POOL_REMARKS = "⚡ Smart Pool"
+    const val SMART_POOL_GROUP_ID = "__smart_pool_group__"
     const val PREF_MIMICRY_PROFILE = "smartpool_mimicry_profile"
     const val PREF_NODE_HISTORY = "smartpool_nodes_history_v1"
     const val TEST_URL_GOOGLE = "https://generativelanguage.googleapis.com/v1beta/openai/models"

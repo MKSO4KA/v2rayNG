@@ -169,15 +169,17 @@ object SubscriptionUpdater {
         @SuppressLint("MissingPermission")
         override suspend fun doWork(): Result {
             val subId = inputData.getString(KEY_SUB_ID)
-            LogUtil.i(AppConfig.TAG, "SubscriptionUpdater update starting via Service: $subId")
+            LogUtil.i(AppConfig.TAG, "SubscriptionUpdater update starting via WorkManager: $subId")
 
             if (subId.isNullOrEmpty()) {
                 LogUtil.w(AppConfig.TAG, "SubscriptionUpdater: missing subId in worker input")
                 return Result.success()
             }
 
+            // Update timestamp and reschedule
             updateLastUpdatedAndReschedule(applicationContext, subId)
 
+            // Notify subscription service
             MessageHelper.sendMsg2SubscriptionService(
                 applicationContext,
                 SubscriptionUpdateMessage(AppConfig.MSG_SUB_UPDATE_START, true, listOf(subId))

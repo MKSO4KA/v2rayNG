@@ -10,8 +10,9 @@ data class SmartNodeHistory(
     var lastLatencyMs: Long = -1L
 ) {
     fun isDead(now: Long = System.currentTimeMillis(), deadlineMs: Long = SmartPoolConstants.NODE_DEADLINE_MS): Boolean {
-        if (consecutiveFails >= SmartPoolConstants.MAX_CONSECUTIVE_FAILS) return true
-        return (now - lastSuccessTime) > deadlineMs
+        // Нода считается мертвой исключительно при 24 активных отказах подряд.
+        // Простой без сети (оффлайн) не уничтожает ноды.
+        return consecutiveFails >= SmartPoolConstants.MAX_CONSECUTIVE_FAILS
     }
 
     fun computeHealthScore(): Double {

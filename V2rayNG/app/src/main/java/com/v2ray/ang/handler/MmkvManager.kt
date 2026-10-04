@@ -11,6 +11,7 @@ import com.tencent.mmkv.MMKVRecoverStrategic
 import com.v2ray.ang.AppConfig.DEFAULT_SUBSCRIPTION_ID
 import com.v2ray.ang.AppConfig.TAG
 import com.v2ray.ang.BuildConfig
+import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.dto.entities.ServerAffiliationInfo
 import com.v2ray.ang.dto.entities.SubscriptionCache
@@ -38,6 +39,10 @@ object MmkvManager {
     val subStorage by lazy { MMKV.mmkvWithID(ID_SUB, MMKV.MULTI_PROCESS_MODE) }
     val settingsStorage by lazy { MMKV.mmkvWithID(ID_SETTING, MMKV.MULTI_PROCESS_MODE) }
 
+    @Volatile
+    var isInitialized: Boolean = false
+        internal set
+
     val settingsHandler by lazy { MmkvSettingsStorage(settingsStorage) }
     val subscriptionHandler by lazy { MmkvSubscriptionStorage(mainStorage, subStorage) }
 
@@ -49,6 +54,7 @@ object MmkvManager {
             override fun wantLogRedirecting(): Boolean = false
             override fun mmkvLog(level: MMKVLogLevel, file: String, line: Int, function: String, message: String) = Unit
         })
+        isInitialized = true
     }
 
     inline fun <T> withProfileIndexLock(block: () -> T): T = synchronized(mainStorage) {
@@ -104,7 +110,13 @@ object MmkvManager {
             profileFullStorage.encode(it.key, JsonUtil.toJson(it.value))
             rawConfigs[it.key]?.let { raw -> serverRawStorage.encode(it.key, raw) }
         }
-        val list = if (append) decodeServerList(subscriptionId) else mutableListOf()
+        val list = if (append) {
+            decodeServerList(subscriptionId)
+        } else {
+            decodeServerList(subscriptionId).filter { guid ->
+                decodeServerConfig(guid)?.configType == EConfigType.SMART_POOL
+            }.toMutableList()
+        }
         val set = list.toHashSet()
         profiles.keys.forEach { if (set.add(it)) list.add(0, it) }
         persistServerList(list, subscriptionId)
@@ -125,13 +137,27 @@ object MmkvManager {
     fun removeServerViaSubid(subscriptionId: String?) {
         val subId = subscriptionHandler.getSubscriptionId(subscriptionId)
         val list = decodeServerList(subId)
+        val smartPoolGuids = mutableListOf<String>()
         list.forEach {
-            if (getSelectServer() == it) mainStorage.remove(KEY_SELECTED_SERVER)
-            profileFullStorage.remove(it)
-            serverAffStorage.remove(it)
+            val config = decodeServerConfig(it)
+            if (config?.configType == EConfigType.SMART_POOL) {
+                config.subscriptionId = DEFAULT_SUBSCRIPTION_ID
+                profileFullStorage.encode(it, JsonUtil.toJson(config))
+                smartPoolGuids.add(it)
+            } else {
+                if (getSelectServer() == it) mainStorage.remove(KEY_SELECTED_SERVER)
+                profileFullStorage.remove(it)
+                serverAffStorage.remove(it)
+                serverRawStorage.remove(it)
+            }
         }
         list.clear()
         encodeServerList(list, subId)
+        if (smartPoolGuids.isNotEmpty() && subId != DEFAULT_SUBSCRIPTION_ID) {
+            val defaultList = decodeServerList(DEFAULT_SUBSCRIPTION_ID)
+            smartPoolGuids.forEach { if (!defaultList.contains(it)) defaultList.add(0, it) }
+            encodeServerList(defaultList, DEFAULT_SUBSCRIPTION_ID)
+        }
     }
 
     fun removeServers(guids: List<String>, subscriptionId: String) {
@@ -182,9 +208,17 @@ object MmkvManager {
     fun removeInvalidServer(guid: String): Int {
         var count = 0
         if (guid.isNotEmpty()) {
-            decodeServerAffiliationInfo(guid)?.let { if (it.testDelayMillis < 0L) { removeServer(guid); count++ } }
+            val config = decodeServerConfig(guid)
+            if (config?.configType != EConfigType.SMART_POOL) {
+                decodeServerAffiliationInfo(guid)?.let { if (it.testDelayMillis < 0L) { removeServer(guid); count++ } }
+            }
         } else {
-            serverAffStorage.allKeys()?.forEach { key -> decodeServerAffiliationInfo(key)?.let { if (it.testDelayMillis < 0L) { removeServer(key); count++ } } }
+            serverAffStorage.allKeys()?.forEach { key ->
+                val config = decodeServerConfig(key)
+                if (config?.configType != EConfigType.SMART_POOL) {
+                    decodeServerAffiliationInfo(key)?.let { if (it.testDelayMillis < 0L) { removeServer(key); count++ } }
+                }
+            }
         }
         return count
     }
@@ -203,12 +237,30 @@ object MmkvManager {
     fun encodeSettings(key: String, value: Int): Boolean = settingsHandler.encode(key, value)
     fun encodeSettings(key: String, value: Long): Boolean = settingsHandler.encode(key, value)
     fun encodeSettings(key: String, value: Boolean): Boolean = settingsHandler.encode(key, value)
-    fun decodeSettingsString(key: String): String? = settingsHandler.decodeString(key)
-    fun decodeSettingsString(key: String, defaultValue: String?): String? = settingsHandler.decodeString(key, defaultValue)
-    fun decodeSettingsInt(key: String, defaultValue: Int): Int = settingsHandler.decodeInt(key, defaultValue)
-    fun decodeSettingsLong(key: String, defaultValue: Long): Long = settingsHandler.decodeLong(key, defaultValue)
-    fun decodeSettingsBool(key: String): Boolean = settingsHandler.decodeBool(key)
-    fun decodeSettingsBool(key: String, defaultValue: Boolean): Boolean = settingsHandler.decodeBool(key, defaultValue)
+    fun decodeSettingsString(key: String): String? {
+        if (!isInitialized) return null
+        return settingsHandler.decodeString(key)
+    }
+    fun decodeSettingsString(key: String, defaultValue: String?): String? {
+        if (!isInitialized) return defaultValue
+        return settingsHandler.decodeString(key, defaultValue)
+    }
+    fun decodeSettingsInt(key: String, defaultValue: Int): Int {
+        if (!isInitialized) return defaultValue
+        return settingsHandler.decodeInt(key, defaultValue)
+    }
+    fun decodeSettingsLong(key: String, defaultValue: Long): Long {
+        if (!isInitialized) return defaultValue
+        return settingsHandler.decodeLong(key, defaultValue)
+    }
+    fun decodeSettingsBool(key: String): Boolean {
+        if (!isInitialized) return false
+        return settingsHandler.decodeBool(key)
+    }
+    fun decodeSettingsBool(key: String, defaultValue: Boolean): Boolean {
+        if (!isInitialized) return defaultValue
+        return settingsHandler.decodeBool(key, defaultValue)
+    }
 
     @Composable
     fun rememberMmkvString(key: String, default: String = ""): MutableState<String> = settingsHandler.rememberMmkvString(key, default)

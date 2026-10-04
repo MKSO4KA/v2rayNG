@@ -43,7 +43,9 @@ class SmartPoolSubAutoUpdater(
 
     fun performUpdate() {
         try {
-            val allSubs = MmkvManager.decodeSubscriptions()
+            val allSubs = MmkvManager.decodeSubscriptions().filter {
+                it.guid != SmartPoolConstants.SMART_POOL_GROUP_ID && it.subscription.url.isNotBlank()
+            }
             val targetSubs = if (subscriptionId.isBlank()) {
                 allSubs
             } else {
@@ -55,12 +57,13 @@ class SmartPoolSubAutoUpdater(
                 return
             }
 
+            val intervalMs = parseIntervalToMillis(intervalStr)
             for (sub in targetSubs) {
                 LogUtil.i(SmartPoolConstants.TAG, "🔄 [AutoUpdater] Таймер сработал: запрос обновления подписки '${sub.subscription.remarks}'...")
-                val res = AngSubscriptionUpdater.updateConfigViaSub(sub)
+                val res = AngSubscriptionUpdater.updateConfigViaSub(sub, callerIntervalMs = intervalMs)
                 LogUtil.i(
                     SmartPoolConstants.TAG,
-                    "🏁 [AutoUpdater] Завершено обновление '${sub.subscription.remarks}': успешно=${res.successCount}, ошибок=${res.failureCount}, узлов=${res.configCount}"
+                    "🏁 [AutoUpdater] Завершено обновление '${sub.subscription.remarks}': успешно=${res.successCount}, ошибок=${res.failureCount}, пропущено=${res.skipCount}, узлов=${res.configCount}"
                 )
             }
         } catch (e: Exception) {

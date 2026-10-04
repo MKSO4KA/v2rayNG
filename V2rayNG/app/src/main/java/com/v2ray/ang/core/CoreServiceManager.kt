@@ -97,6 +97,7 @@ object CoreServiceManager {
         if (dialerAddr.isNotNullEmpty()) CoreNativeManager.reconcileBrowserDialer(dialerAddr)
         coreController.startLoop(result.content, tunFd)
         if (!isRunning()) error("Core failed to start")
+        com.v2ray.ang.smartpool.SmartPoolManager.onCoreStarted()
         browserDialer?.stop()
         browserDialer = null
         when (dialerMode) {

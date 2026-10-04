@@ -21,8 +21,15 @@ object AngSubscriptionUpdater {
         }
     }
 
-    fun updateConfigViaSub(it: SubscriptionCache): SubscriptionUpdateResult {
+    fun updateConfigViaSub(
+        it: SubscriptionCache,
+        callerIntervalMs: Long = 0L,
+        force: Boolean = false
+    ): SubscriptionUpdateResult {
         if (!it.subscription.enabled || TextUtils.isEmpty(it.guid) || TextUtils.isEmpty(it.subscription.remarks) || TextUtils.isEmpty(it.subscription.url)) {
+            return SubscriptionUpdateResult(skipCount = 1)
+        }
+        if (!com.v2ray.ang.smartpool.SubscriptionUpdateCoordinator.canUpdate(it.guid, callerIntervalMs, force, it.subscription.lastUpdated)) {
             return SubscriptionUpdateResult(skipCount = 1)
         }
         val url = HttpUtil.toIdnUrl(it.subscription.url)
@@ -76,6 +83,7 @@ object AngSubscriptionUpdater {
             }
             com.v2ray.ang.smartpool.SmartPoolManager.onProxiesUpdated(it.guid)
             it.subscription.lastUpdated = System.currentTimeMillis()
+            com.v2ray.ang.smartpool.SubscriptionUpdateCoordinator.markUpdated(it.guid)
             MmkvManager.encodeSubscription(it.guid, it.subscription)
             SubscriptionUpdateResult(configCount = count, successCount = 1)
         } else {
@@ -106,7 +114,11 @@ object AngSubscriptionUpdater {
     }
 
     fun removeInvalidServer(subId: String) {
-        val invalid = MmkvManager.decodeServerList(subId).filter { MmkvManager.decodeServerAffiliationInfo(it)?.testDelayMillis?.let { d -> d < 0L } == true }
+        val invalid = MmkvManager.decodeServerList(subId).filter { guid ->
+            val config = MmkvManager.decodeServerConfig(guid)
+            config?.configType != com.v2ray.ang.enums.EConfigType.SMART_POOL &&
+                MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis?.let { d -> d < 0L } == true
+        }
         MmkvManager.removeServers(invalid, subId)
     }
 

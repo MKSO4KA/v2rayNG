@@ -19,9 +19,19 @@ object SmartSubFetcher {
 
     fun fetchRawContentWithCascade(subUrl: String, secret: String? = null, profile: MimicryProfile? = null): String {
         val prof = profile ?: MimicryProfile()
+        // Уровень 1: Прямой запрос с мимикрией
         var content = runCatching { fetchDirect(subUrl, prof) }.getOrNull()
+
+        // Уровень 2: Через активное ядро (VPN или ProxyOnly), если оно уже запущено
         if (content.isNullOrBlank()) {
-            content = runCatching { fetchViaSocksFallback(subUrl, prof) }.getOrNull()
+            content = fetchViaActiveCoreFallback(subUrl, prof)
+        }
+
+        // Уровень 3: Скрытый эфемерный SmartPool без тумблера VPN, если ядро выключено
+        if (content.isNullOrBlank()) {
+            content = kotlinx.coroutines.runBlocking {
+                SmartEphemeralPoolRunner.fetchViaEphemeralPool(subUrl, prof)
+            }
         }
         if (content.isNullOrBlank()) return ""
 
@@ -253,31 +263,36 @@ object SmartSubFetcher {
         }
     }
 
-    private fun fetchViaSocksFallback(subUrl: String, prof: MimicryProfile): String {
-        val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", SmartPoolConstants.BASE_POOL_PORT))
-        val client = OkHttpClient.Builder()
-            .proxy(proxy)
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .followRedirects(true)
-            .followSslRedirects(true)
-            .build()
-        val req = Request.Builder()
-            .url(subUrl)
-            .header("User-Agent", prof.userAgent)
-            .header("Accept-Language", prof.lang)
-            .header("Accept-Encoding", prof.encoding)
-            .header("X-Device-Model", prof.model)
-            .header("X-HWID", prof.hwid)
-            .header("X-Device-OS", prof.os)
-            .header("X-Ver-OS", prof.osVer)
-            .header("X-App-Version", prof.appVer)
-            .header("X-Device-Locale", prof.locale)
-            .build()
-        return client.newCall(req).execute().use { resp ->
-            val bytes = resp.body?.bytes() ?: return@use ""
-            decompressIfNeeded(bytes, resp.header("Content-Encoding"))
-        }
+    private fun fetchViaActiveCoreFallback(subUrl: String, prof: MimicryProfile): String? {
+        if (!com.v2ray.ang.core.CoreServiceManager.isRunning()) return null
+        val httpPort = com.v2ray.ang.handler.SettingsManager.getHttpPort()
+        val targetPort = if (httpPort > 0) httpPort else SmartPoolConstants.BASE_POOL_PORT
+        val proxyType = if (httpPort > 0) Proxy.Type.HTTP else Proxy.Type.SOCKS
+
+        return runCatching {
+            val proxy = Proxy(proxyType, InetSocketAddress("127.0.0.1", targetPort))
+            val client = OkHttpClient.Builder()
+                .proxy(proxy)
+                .connectTimeout(12, TimeUnit.SECONDS)
+                .readTimeout(12, TimeUnit.SECONDS)
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .build()
+            val req = Request.Builder()
+                .url(subUrl)
+                .header("User-Agent", prof.userAgent)
+                .header("Accept-Language", prof.lang)
+                .header("Accept-Encoding", prof.encoding)
+                .build()
+            client.newCall(req).execute().use { resp ->
+                val bytes = resp.body?.bytes() ?: return@use ""
+                decompressBytes(bytes, resp.header("Content-Encoding"))
+            }
+        }.getOrNull()
+    }
+
+    fun decompressBytes(bytes: ByteArray, contentEncoding: String?): String {
+        return decompressIfNeeded(bytes, contentEncoding)
     }
 
     private fun decompressIfNeeded(bytes: ByteArray, contentEncoding: String?): String {

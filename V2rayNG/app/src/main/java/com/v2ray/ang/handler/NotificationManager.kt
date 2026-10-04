@@ -162,9 +162,15 @@ object NotificationManager {
      * @param title The new notification title.
      */
     fun updateTitle(title: String) {
+        val service = getService() ?: return
         if (mBuilder != null) {
             mBuilder?.setContentTitle(title)
             getNotificationManager()?.notify(NOTIFICATION_ID, mBuilder?.build())
+        } else {
+            // Если mBuilder еще не был сформирован, форсируем гарантированный показ
+            showNotification(CoreServiceManager.getRunningServerName().let {
+                ProfileItem.create(com.v2ray.ang.enums.EConfigType.SMART_POOL).apply { remarks = title }
+            })
         }
     }
 

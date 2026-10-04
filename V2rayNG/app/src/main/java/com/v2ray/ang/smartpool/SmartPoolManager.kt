@@ -16,23 +16,39 @@ object SmartPoolManager {
     private var autoUpdater: SmartPoolSubAutoUpdater? = null
     private var radar: SmartRadarCapture? = null
     var activeProfile: ProfileItem? = null
+    @Volatile var currentLeaderRemarks: String? = null
 
     val radarCountState = MutableStateFlow(0)
     val radarRunningState = MutableStateFlow(false)
 
     fun isSmartPoolConfig(profile: ProfileItem?): Boolean = profile?.configType == EConfigType.SMART_POOL
 
+    fun ensureSmartPoolGroup() {
+        if (!MmkvManager.isInitialized) return
+        val current = MmkvManager.decodeSubscription(SmartPoolConstants.SMART_POOL_GROUP_ID)
+        if (current == null) {
+            val subItem = com.v2ray.ang.dto.entities.SubscriptionItem(
+                remarks = SmartPoolConstants.SMART_POOL_REMARKS,
+                url = "",
+                autoUpdate = false
+            )
+            MmkvManager.encodeSubscription(SmartPoolConstants.SMART_POOL_GROUP_ID, subItem)
+        }
+    }
+
     fun getAllServerGuids(): List<String> {
         val result = mutableListOf<String>()
         result.addAll(MmkvManager.decodeServerList(""))
         MmkvManager.decodeSubscriptions().forEach { sub ->
-            result.addAll(MmkvManager.decodeServerList(sub.guid))
+            if (sub.guid != SmartPoolConstants.SMART_POOL_GROUP_ID) {
+                result.addAll(MmkvManager.decodeServerList(sub.guid))
+            }
         }
         return result.distinct()
     }
 
     fun getValidPoolCandidates(targetFilterRegex: String? = null, targetSubId: String? = null): List<ProfileItem> {
-        val effectiveSubId = targetSubId ?: activeProfile?.smartPoolTargetSubId ?: activeProfile?.subscriptionId
+        val effectiveSubId = targetSubId ?: activeProfile?.smartPoolTargetSubId
         val effectiveRegex = targetFilterRegex ?: activeProfile?.smartPoolFilterRegex ?: run {
             val sel = MmkvManager.getSelectServer()
             if (!sel.isNullOrBlank()) MmkvManager.decodeServerConfig(sel)?.smartPoolFilterRegex else null
@@ -51,6 +67,7 @@ object SmartPoolManager {
             prober?.calibrateOnce()
             bal.getCurrentLeader()?.let { leader ->
                 LogUtil.i(AppConfig.TAG, "SmartPool: proxies updated, leader is '${leader.profile.remarks}' (127.0.0.1:${leader.localPort})")
+                currentLeaderRemarks = leader.profile.remarks
                 com.v2ray.ang.handler.NotificationManager.updateTitle("${SmartPoolConstants.SMART_POOL_REMARKS} → ${leader.profile.remarks}")
             }
         }
@@ -59,8 +76,13 @@ object SmartPoolManager {
     fun getCurrentLeader(): SmartNodeState? = balancer?.getCurrentLeader()
 
     fun getNotificationTitle(defaultTitle: String): String {
+        val remarks = currentLeaderRemarks
+        if (!remarks.isNullOrBlank()) {
+            return "${SmartPoolConstants.SMART_POOL_REMARKS} → $remarks"
+        }
         val leader = getCurrentLeader()
         return if (leader != null && leader.profile.remarks.isNotBlank()) {
+            currentLeaderRemarks = leader.profile.remarks
             "${SmartPoolConstants.SMART_POOL_REMARKS} → ${leader.profile.remarks}"
         } else {
             defaultTitle
@@ -85,6 +107,7 @@ object SmartPoolManager {
         val bal = SmartPoolBalancer(candidates, portLimit)
         bal.onLeaderChanged = { leader ->
             LogUtil.i(AppConfig.TAG, "SmartPool: active leader -> '${leader.profile.remarks}' (127.0.0.1:${leader.localPort})")
+            currentLeaderRemarks = leader.profile.remarks
             com.v2ray.ang.handler.NotificationManager.updateTitle("${SmartPoolConstants.SMART_POOL_REMARKS} → ${leader.profile.remarks}")
         }
         balancer = bal
@@ -93,20 +116,27 @@ object SmartPoolManager {
         disp.start()
         LogUtil.i(AppConfig.TAG, "SmartPool: dispatcher listening on 127.0.0.1:${SmartPoolConstants.DISPATCHER_PORT}")
 
+        bal.getCurrentLeader()?.let { leader ->
+            currentLeaderRemarks = leader.profile.remarks
+            com.v2ray.ang.handler.NotificationManager.updateTitle("${SmartPoolConstants.SMART_POOL_REMARKS} → ${leader.profile.remarks}")
+        }
+
         val probeInterval = SmartPoolSubAutoUpdater.parseIntervalToMillis(profile.smartPoolInterval)
         val tolerance = profile.smartPoolTolerance ?: 30.0
-        val prb = SmartPoolProber(bal, probeInterval, tolerance)
-        prober = prb
-        prb.start()
+        prober = SmartPoolProber(bal, probeInterval, tolerance)
 
         val subUpdateStr = profile.smartPoolSubUpdateInterval
-        val updater = SmartPoolSubAutoUpdater(targetSub, subUpdateStr)
-        autoUpdater = updater
-        updater.start()
+        autoUpdater = SmartPoolSubAutoUpdater(targetSub, subUpdateStr)
+    }
+
+    fun onCoreStarted() {
+        prober?.start()
+        autoUpdater?.start()
     }
 
     fun stop() {
         activeProfile = null
+        currentLeaderRemarks = null
         autoUpdater?.stop()
         autoUpdater = null
         dispatcher?.stop()

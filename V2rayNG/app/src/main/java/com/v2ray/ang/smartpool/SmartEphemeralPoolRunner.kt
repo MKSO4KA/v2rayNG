@@ -73,9 +73,7 @@ object SmartEphemeralPoolRunner {
 
                 val req = Request.Builder()
                     .url(subUrl)
-                    .header("User-Agent", prof.userAgent)
-                    .header("Accept-Language", prof.lang)
-                    .header("Accept-Encoding", prof.encoding)
+                    .let { SmartSubFetcher.applyMimicryProfile(it, prof) }
                     .build()
 
                 client.newCall(req).execute().use { resp ->

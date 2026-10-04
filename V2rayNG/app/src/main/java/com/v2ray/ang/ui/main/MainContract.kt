@@ -63,7 +63,6 @@ sealed interface MainAction {
     data class ShareClipboard(val guid: String) : MainAction
     data class ShareFullContent(val guid: String) : MainAction
     data object DismissQRCodeDialog : MainAction
-    data object OpenRadar : MainAction
 
     data class ImportBatchConfig(val configText: String) : MainAction
 

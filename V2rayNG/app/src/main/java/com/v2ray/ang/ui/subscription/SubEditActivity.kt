@@ -126,6 +126,14 @@ fun SubEditScreen(
     var url by rememberSaveable { mutableStateOf(initial.url.orEmpty()) }
     var isUrlError by rememberSaveable { mutableStateOf(false) }
     var userAgent by rememberSaveable { mutableStateOf(initial.userAgent.orEmpty()) }
+    var mimicryModel by rememberSaveable { mutableStateOf(initial.mimicryModel.orEmpty()) }
+    var mimicryHwid by rememberSaveable { mutableStateOf(initial.mimicryHwid.orEmpty()) }
+    var mimicryOs by rememberSaveable { mutableStateOf(initial.mimicryOs.orEmpty()) }
+    var mimicryOsVer by rememberSaveable { mutableStateOf(initial.mimicryOsVer.orEmpty()) }
+    var mimicryAppVer by rememberSaveable { mutableStateOf(initial.mimicryAppVer.orEmpty()) }
+    var mimicryEncoding by rememberSaveable { mutableStateOf(initial.mimicryEncoding.orEmpty()) }
+    var mimicryLocale by rememberSaveable { mutableStateOf(initial.mimicryLocale.orEmpty()) }
+    var mimicryLang by rememberSaveable { mutableStateOf(initial.mimicryLang.orEmpty()) }
     var requestHeaders by rememberSaveable { mutableStateOf(initial.requestHeaders.orEmpty()) }
     var filter by rememberSaveable { mutableStateOf(initial.filter ?: "") }
     var enabled by rememberSaveable { mutableStateOf(initial.enabled) }
@@ -146,6 +154,14 @@ fun SubEditScreen(
         subItem.url = url
         subItem.userAgent = userAgent
         subItem.requestHeaders = requestHeaders
+        subItem.mimicryModel = mimicryModel
+        subItem.mimicryHwid = mimicryHwid
+        subItem.mimicryOs = mimicryOs
+        subItem.mimicryOsVer = mimicryOsVer
+        subItem.mimicryAppVer = mimicryAppVer
+        subItem.mimicryEncoding = mimicryEncoding
+        subItem.mimicryLocale = mimicryLocale
+        subItem.mimicryLang = mimicryLang
         subItem.filter = filter
         subItem.enabled = enabled
         subItem.autoUpdate = autoUpdate
@@ -216,8 +232,38 @@ fun SubEditScreen(
                 isError = isUrlError,
                 supportingText = if (isUrlError) stringResource(R.string.toast_invalid_url) else null
             )
-            FormTextField(stringResource(R.string.sub_setting_user_agent), userAgent, { userAgent = it })
             FormTextField(stringResource(R.string.sub_setting_request_headers), requestHeaders, { requestHeaders = it })
+            SubMimicrySection(
+                userAgent = userAgent,
+                onUserAgentChange = { userAgent = it },
+                model = mimicryModel,
+                onModelChange = { mimicryModel = it },
+                hwid = mimicryHwid,
+                onHwidChange = { mimicryHwid = it },
+                os = mimicryOs,
+                onOsChange = { mimicryOs = it },
+                osVer = mimicryOsVer,
+                onOsVerChange = { mimicryOsVer = it },
+                appVer = mimicryAppVer,
+                onAppVerChange = { mimicryAppVer = it },
+                encoding = mimicryEncoding,
+                onEncodingChange = { mimicryEncoding = it },
+                locale = mimicryLocale,
+                onLocaleChange = { mimicryLocale = it },
+                lang = mimicryLang,
+                onLangChange = { mimicryLang = it },
+                onProfileApplied = { prof ->
+                    userAgent = prof.userAgent
+                    mimicryModel = prof.model
+                    mimicryHwid = prof.hwid
+                    mimicryOs = prof.os
+                    mimicryOsVer = prof.osVer
+                    mimicryAppVer = prof.appVer
+                    mimicryEncoding = prof.encoding
+                    mimicryLocale = prof.locale
+                    mimicryLang = prof.lang
+                }
+            )
             FormTextField(stringResource(R.string.sub_setting_filter), filter, { filter = it })
             SettingsSwitchItem(
                 title = stringResource(R.string.sub_setting_enable),

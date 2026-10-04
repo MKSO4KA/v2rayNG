@@ -33,6 +33,7 @@ object Utils {
     fun findRandomFreePort(): Int = NetUtils.findRandomFreePort()
     fun isValidSubUrl(value: String?): Boolean = NetUtils.isValidSubUrl(value)
     fun isIpInCidr(ip: String, cidr: String): Boolean = NetUtils.isIpInCidr(ip, cidr)
+    fun getLanIpAddress(): String? = NetUtils.getLanIpAddress()
 
     fun openUri(context: Context, uriString: String) {
         try {

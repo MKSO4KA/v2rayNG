@@ -10,15 +10,29 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 data class MimicryProfile(
     val userAgent: String = "v2rayNG/1.8.5",
-    val model: String = "Android-Device",
-    val hwid: String = "[[MASK]]<<RND:16>>",
+    val model: String = "",
+    val hwid: String = "",
     val os: String = "Android",
-    val osVer: String = "14",
-    val appVer: String = "1.8.5",
+    val osVer: String = "",
+    val appVer: String = "",
     val encoding: String = "gzip",
-    val locale: String = "ru_RU",
-    val lang: String = "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"
-)
+    val locale: String = "",
+    val lang: String = ""
+) {
+    companion object {
+        val HAPP_DEFAULT = MimicryProfile(
+            userAgent = "Happ/4.6.0/Android/17903223988441985697",
+            model = "RMX2063",
+            hwid = "a35bb23fdaadd515",
+            os = "Android",
+            osVer = "11",
+            appVer = "",
+            encoding = "gzip",
+            locale = "ru",
+            lang = "ru-RU,ru;q=0.9"
+        )
+    }
+}
 
 class SmartRadarCapture(private val port: Int = SmartPoolConstants.RADAR_PORT) {
     private val isRunning = AtomicBoolean(false)
@@ -72,14 +86,14 @@ class SmartRadarCapture(private val port: Int = SmartPoolConstants.RADAR_PORT) {
         val first = captures[0]
         return MimicryProfile(
             userAgent = first["user-agent"] ?: "v2rayNG/1.8.5",
-            model = first["x-device-model"] ?: first["model"] ?: "Android-Device",
-            hwid = first["x-hwid"] ?: "[[MASK]]<<RND:16>>",
-            os = first["x-device-os"] ?: "Android",
-            osVer = first["x-ver-os"] ?: "14",
-            appVer = first["x-app-version"] ?: "1.8.5",
+            model = first["x-device-model"] ?: first["device-model"] ?: first["x-model"] ?: first["model"] ?: "",
+            hwid = first["x-hwid"] ?: first["hwid"] ?: first["x-device-id"] ?: first["device-id"] ?: first["x-hardware-id"] ?: "",
+            os = first["x-device-os"] ?: first["x-os"] ?: first["os"] ?: "",
+            osVer = first["x-ver-os"] ?: first["x-os-version"] ?: first["os-version"] ?: first["x-os-ver"] ?: "",
+            appVer = first["x-app-version"] ?: first["x-app-ver"] ?: first["app-version"] ?: "",
             encoding = first["accept-encoding"] ?: "gzip",
-            locale = first["x-device-locale"] ?: "ru_RU",
-            lang = first["accept-language"] ?: "ru-RU,ru;q=0.9"
+            locale = first["x-device-locale"] ?: first["x-locale"] ?: first["locale"] ?: "",
+            lang = first["accept-language"] ?: ""
         )
     }
 }

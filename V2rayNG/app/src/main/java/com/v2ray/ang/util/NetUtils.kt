@@ -102,4 +102,26 @@ object NetUtils {
     }
 
     private fun ipv4ToLong(ip: String): Long = ip.split('.').fold(0L) { result, octet -> (result shl 8) or octet.toLong() }
+
+    fun getLanIpAddress(): String? {
+        return try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces() ?: return null
+            for (iface in interfaces) {
+                if (iface.isLoopback || !iface.isUp) continue
+                val addresses = iface.inetAddresses
+                for (addr in addresses) {
+                    if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                        val host = addr.hostAddress
+                        if (host != null && (host.startsWith("192.168.") || host.startsWith("10.") || host.startsWith("172."))) {
+                            return host
+                        }
+                    }
+                }
+            }
+            null
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Failed to get LAN IP address", e)
+            null
+        }
+    }
 }

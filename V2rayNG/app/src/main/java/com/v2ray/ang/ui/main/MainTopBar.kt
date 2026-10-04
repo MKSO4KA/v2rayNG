@@ -73,12 +73,6 @@ fun MainTopBar(
                     Icon(painterResource(R.drawable.ic_search_24dp), contentDescription = stringResource(R.string.acc_search))
                 }
             }
-            IconButton(onClick = { onAction(MainAction.OpenRadar) }) {
-                Icon(
-                    painterResource(R.drawable.ic_scan_24dp),
-                    contentDescription = "Радар мимикрии"
-                )
-            }
             Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
                 IconButton(onClick = { showImportMenu = true }) {
                     Icon(painterResource(R.drawable.ic_add_24dp), contentDescription = stringResource(R.string.acc_add))

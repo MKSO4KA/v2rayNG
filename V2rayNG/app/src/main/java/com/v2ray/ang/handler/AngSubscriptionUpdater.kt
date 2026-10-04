@@ -51,7 +51,7 @@ object AngSubscriptionUpdater {
         )
         var configText = runCatching { HttpUtil.getUrlContentWithUserAgent(req) }.getOrDefault("")
         if (configText.isEmpty()) {
-            configText = runCatching { com.v2ray.ang.smartpool.SmartSubFetcher.fetchRawContentWithCascade(url) }.getOrDefault("")
+            configText = runCatching { com.v2ray.ang.smartpool.SmartSubFetcher.fetchRawContentWithCascade(url, profile = it.subscription.toMimicryProfile()) }.getOrDefault("")
         }
         if (configText.isEmpty()) {
             configText = runCatching {

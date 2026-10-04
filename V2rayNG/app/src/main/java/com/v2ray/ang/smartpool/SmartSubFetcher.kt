@@ -247,15 +247,7 @@ object SmartSubFetcher {
             .build()
         val req = Request.Builder()
             .url(subUrl)
-            .header("User-Agent", prof.userAgent)
-            .header("Accept-Language", prof.lang)
-            .header("Accept-Encoding", prof.encoding)
-            .header("X-Device-Model", prof.model)
-            .header("X-HWID", prof.hwid)
-            .header("X-Device-OS", prof.os)
-            .header("X-Ver-OS", prof.osVer)
-            .header("X-App-Version", prof.appVer)
-            .header("X-Device-Locale", prof.locale)
+            .let { applyMimicryProfile(it, prof) }
             .build()
         return client.newCall(req).execute().use { resp ->
             val bytes = resp.body?.bytes() ?: return@use ""
@@ -280,9 +272,7 @@ object SmartSubFetcher {
                 .build()
             val req = Request.Builder()
                 .url(subUrl)
-                .header("User-Agent", prof.userAgent)
-                .header("Accept-Language", prof.lang)
-                .header("Accept-Encoding", prof.encoding)
+                .let { applyMimicryProfile(it, prof) }
                 .build()
             client.newCall(req).execute().use { resp ->
                 val bytes = resp.body?.bytes() ?: return@use ""
@@ -314,5 +304,18 @@ object SmartSubFetcher {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, keySpec, gcmSpec)
         return String(cipher.doFinal(data), Charsets.UTF_8)
+    }
+
+    fun applyMimicryProfile(builder: Request.Builder, prof: MimicryProfile): Request.Builder {
+        if (prof.userAgent.isNotBlank()) builder.header("User-Agent", prof.userAgent)
+        if (prof.lang.isNotBlank()) builder.header("Accept-Language", prof.lang)
+        if (prof.encoding.isNotBlank()) builder.header("Accept-Encoding", prof.encoding)
+        if (prof.model.isNotBlank()) builder.header("X-Device-Model", prof.model)
+        if (prof.hwid.isNotBlank()) builder.header("X-HWID", prof.hwid)
+        if (prof.os.isNotBlank()) builder.header("X-Device-OS", prof.os)
+        if (prof.osVer.isNotBlank()) builder.header("X-Ver-OS", prof.osVer)
+        if (prof.appVer.isNotBlank()) builder.header("X-App-Version", prof.appVer)
+        if (prof.locale.isNotBlank()) builder.header("X-Device-Locale", prof.locale)
+        return builder
     }
 }

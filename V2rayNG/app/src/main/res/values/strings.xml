@@ -422,4 +422,30 @@
     <string name="toast_gist_sync_partial">Gist synced partially</string>
     <string name="toast_gist_sync_failed">Gist sync failed</string>
 
+    <string name="mimicry_action_happ_preset">Apply Happ Preset</string>
+    <string name="toast_mimicry_happ_applied">Happ profile preset applied</string>
+
+    <string name="radar_local_url">Local URL (on this device):</string>
+    <string name="radar_lan_url">LAN URL (for other devices on Wi-Fi):</string>
+    <string name="radar_action_show_qrcode">Show QR Code</string>
+    <string name="radar_copy_local_url">Copy local URL</string>
+    <string name="radar_copy_lan_url">Copy LAN URL</string>
+
+    <!-- Mimicry Profile -->
+    <string name="title_mimicry_profile">Mimicry Profile</string>
+    <string name="mimicry_model">Device Model (X-Device-Model)</string>
+    <string name="mimicry_hwid">Device HWID (X-HWID)</string>
+    <string name="mimicry_os">Operating System (X-Device-OS)</string>
+    <string name="mimicry_os_ver">OS Version (X-Ver-OS)</string>
+    <string name="mimicry_app_ver">App Version (X-App-Version)</string>
+    <string name="mimicry_encoding">Encoding (Accept-Encoding)</string>
+    <string name="mimicry_locale">Locale (X-Device-Locale)</string>
+    <string name="mimicry_lang">Language (Accept-Language)</string>
+    <string name="mimicry_action_radar">Smart Radar</string>
+    <string name="mimicry_action_copy">Copy Mimicry Profile</string>
+    <string name="mimicry_action_paste">Paste Mimicry Profile</string>
+    <string name="toast_mimicry_copied">Mimicry profile copied to clipboard</string>
+    <string name="toast_mimicry_pasted">Mimicry profile pasted successfully</string>
+    <string name="toast_mimicry_invalid_json">Clipboard does not contain a valid mimicry profile</string>
+
 </resources>

@@ -31,6 +31,7 @@ import com.v2ray.ang.ui.AboutActivity
 import com.v2ray.ang.ui.base.HelperBaseComponentActivity
 import com.v2ray.ang.ui.server.ProfileEditorResult
 import com.v2ray.ang.ui.server.ServerCustomConfigActivity
+import com.v2ray.ang.ui.server.ServerSmartPoolActivity
 import com.v2ray.ang.ui.server.ServerHttpActivity
 import com.v2ray.ang.ui.server.ServerHysteria2Activity
 import com.v2ray.ang.ui.server.ServerShadowsocksActivity
@@ -192,6 +193,7 @@ class MainActivity : HelperBaseComponentActivity() {
 
     private fun importManually(createConfigType: Int) {
         val intent = when (createConfigType) {
+            EConfigType.SMART_POOL.value -> Intent(this, ServerSmartPoolActivity::class.java)
             EConfigType.VMESS.value -> Intent(this, ServerVmessActivity::class.java)
             EConfigType.VLESS.value -> Intent(this, ServerVlessActivity::class.java)
             EConfigType.SHADOWSOCKS.value -> Intent(this, ServerShadowsocksActivity::class.java)
@@ -241,6 +243,7 @@ class MainActivity : HelperBaseComponentActivity() {
 
     private fun editServer(guid: String, profile: ProfileItem) {
         val activityClass = when (profile.configType) {
+            EConfigType.SMART_POOL -> ServerSmartPoolActivity::class.java
             EConfigType.CUSTOM -> ServerCustomConfigActivity::class.java
             EConfigType.VMESS -> ServerVmessActivity::class.java
             EConfigType.VLESS -> ServerVlessActivity::class.java

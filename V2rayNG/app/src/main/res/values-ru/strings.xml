@@ -414,4 +414,18 @@
     <string name="connection_test_empty_message">подробности отсутствуют</string>
     <string name="value_unknown">неизвестно</string>
 
+    <string name="smartpool_policy_type">Тип группы политик</string>
+    <string name="smartpool_policy_lowest_latency">Наименьшая задержка</string>
+    <string name="smartpool_policy_random">Случайный</string>
+    <string name="smartpool_policy_round_robin">По очереди</string>
+    <string name="smartpool_source_group">Из группы подписки</string>
+    <string name="smartpool_source_group_all">Все группы</string>
+    <string name="smartpool_filter_regex">Название фильтра</string>
+    <string name="smartpool_interval">Interval (e.g. 20s, 3m) [Optional]</string>
+    <string name="smartpool_tolerance">Tolerance (ms) [Optional]</string>
+    <string name="smartpool_validation_method">Validation Method (Bypass Auth Scenario)</string>
+    <string name="smartpool_val_normal_ping">Normal (Ping)</string>
+    <string name="smartpool_val_okhttp">OkHttp (HTTP Ping)</string>
+    <string name="smartpool_sub_update_interval">Интервал автообновления подписки [Опционально]</string>
+
 </resources>

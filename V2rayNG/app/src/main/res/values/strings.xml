@@ -392,4 +392,18 @@
     <string name="connection_test_empty_message">no details available</string>
     <string name="value_unknown">unknown</string>
 
+    <string name="smartpool_policy_type">Policy group type</string>
+    <string name="smartpool_policy_lowest_latency">Lowest latency</string>
+    <string name="smartpool_policy_random">Random</string>
+    <string name="smartpool_policy_round_robin">Round-robin</string>
+    <string name="smartpool_source_group">Source subscription group</string>
+    <string name="smartpool_source_group_all">All groups</string>
+    <string name="smartpool_filter_regex">Filter regex</string>
+    <string name="smartpool_interval">Interval (e.g. 20s, 3m) [Optional]</string>
+    <string name="smartpool_tolerance">Tolerance (ms) [Optional]</string>
+    <string name="smartpool_validation_method">Validation Method (Bypass Auth Scenario)</string>
+    <string name="smartpool_val_normal_ping">Normal (Ping)</string>
+    <string name="smartpool_val_okhttp">OkHttp (HTTP Ping)</string>
+    <string name="smartpool_sub_update_interval">Subscription auto-update interval [Optional]</string>
+
 </resources>

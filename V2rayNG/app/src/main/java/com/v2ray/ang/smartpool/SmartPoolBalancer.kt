@@ -6,13 +6,14 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 data class SmartNodeState(
-    val profile: ProfileItem,
+    var profile: ProfileItem,
     var localPort: Int,
     var latencyMs: Long = -1,
     var penalty: Int = 0,
     var failCount: Int = 0,
     var cooldownUntil: Long = 0,
-    var isBanned: Boolean = false
+    var isBanned: Boolean = false,
+    val hash: String = SmartNodeHasher.computeNodeHash(profile)
 ) {
     fun isAvailable(): Boolean {
         val now = System.currentTimeMillis()
@@ -129,19 +130,86 @@ class SmartPoolBalancer(initialNodes: List<ProfileItem>) {
         }
     }
 
-    fun updateStandbys(verified: List<SmartNodeState>) {
+    fun updateStandbys(verified: List<SmartNodeState>, toleranceMs: Double = 0.0) {
         var newLeader: SmartNodeState? = null
         synchronized(lock) {
             if (verified.isEmpty()) return
             val sorted = verified.sortedBy { it.effectiveRTT() }
             val best = sorted[0]
-            if (best.profile.remarks != activeLeader?.profile?.remarks) {
-                newLeader = best
+            val current = activeLeader
+            val shouldSwitch = if (current != null && current.isAvailable() && current.profile.remarks != best.profile.remarks) {
+                best.effectiveRTT() < (current.effectiveRTT() - toleranceMs.toLong())
+            } else {
+                best.profile.remarks != current?.profile?.remarks
             }
-            activeLeader = best
-            standbys = sorted.drop(1).take(SmartPoolConstants.STANDBY_CAPACITY).toMutableList()
+            if (shouldSwitch) {
+                newLeader = best
+                activeLeader = best
+            }
+            standbys = sorted.filter { it.localPort != activeLeader?.localPort }.take(SmartPoolConstants.STANDBY_CAPACITY).toMutableList()
         }
         newLeader?.let { notifyLeader(it) }
+    }
+
+    fun differentialUpdate(newCandidates: List<ProfileItem>): Boolean {
+        synchronized(lock) {
+            val unique = SmartPoolNodeFilter.filterAndDeduplicate(newCandidates)
+            val newHashes = unique.map { SmartNodeHasher.computeNodeHash(it) }
+            val currentHashes = nodes.map { it.hash }
+
+            if (newHashes == currentHashes) {
+                unique.forEachIndexed { i, p ->
+                    if (i < nodes.size) nodes[i].profile = p
+                }
+                LogUtil.i(SmartPoolConstants.TAG, "🔍 [Сверка нод] Все ${nodes.size} нод без изменений по хэшам. Статистика задержки и Лидер '${activeLeader?.profile?.remarks}' сохранены!")
+                return false
+            }
+
+            LogUtil.i(SmartPoolConstants.TAG, "⚡ [Сверка нод] Обнаружены изменения в составе нод (было ${nodes.size}, стало ${unique.size}). Выполняем точечное слияние...")
+            val existingByHash = nodes.associateBy { it.hash }.toMutableMap()
+            val usedPorts = nodes.map { it.localPort }.toMutableSet()
+            val updatedNodes = mutableListOf<SmartNodeState>()
+
+            var nextPort = SmartPoolConstants.BASE_POOL_PORT
+            fun allocatePort(): Int {
+                while (nextPort in usedPorts) {
+                    nextPort++
+                }
+                usedPorts.add(nextPort)
+                return nextPort
+            }
+
+            for (profile in unique) {
+                val h = SmartNodeHasher.computeNodeHash(profile)
+                val existing = existingByHash[h]
+                if (existing != null) {
+                    existing.profile = profile
+                    updatedNodes.add(existing)
+                } else {
+                    val port = allocatePort()
+                    updatedNodes.add(SmartNodeState(profile = profile, localPort = port, hash = h))
+                }
+            }
+
+            nodes.clear()
+            nodes.addAll(updatedNodes)
+
+            val survivingLeader = nodes.firstOrNull { it.hash == activeLeader?.hash }
+            if (survivingLeader != null && survivingLeader.isAvailable()) {
+                activeLeader = survivingLeader
+            } else {
+                activeLeader = nodes.firstOrNull { it.isAvailable() }
+                notifyLeader(activeLeader)
+            }
+
+            val leaderHash = activeLeader?.hash
+            standbys = nodes.filter { it.hash != leaderHash && it.isAvailable() }
+                .sortedBy { it.effectiveRTT() }
+                .take(SmartPoolConstants.STANDBY_CAPACITY)
+                .toMutableList()
+
+            return true
+        }
     }
 
     fun listAll(): List<SmartNodeState> = synchronized(lock) { nodes.toList() }
@@ -171,5 +239,4 @@ class SmartPoolBalancer(initialNodes: List<ProfileItem>) {
             }
         }
     }
-
 }

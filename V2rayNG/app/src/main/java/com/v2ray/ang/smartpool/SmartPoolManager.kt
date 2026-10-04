@@ -14,6 +14,8 @@ object SmartPoolManager {
     private var balancer: SmartPoolBalancer? = null
     private var prober: SmartPoolProber? = null
     private var radar: SmartRadarCapture? = null
+    private var autoUpdater: SmartPoolSubAutoUpdater? = null
+    var activeProfile: ProfileItem? = null
 
     val radarCountState = MutableStateFlow(0)
     val radarRunningState = MutableStateFlow(false)
@@ -31,11 +33,23 @@ object SmartPoolManager {
         return result.distinct()
     }
 
-    fun getValidPoolCandidates(): List<ProfileItem> {
-        val allGuids = getAllServerGuids()
+    fun getValidPoolCandidates(
+        targetFilterRegex: String? = null,
+        targetSubId: String? = null
+    ): List<ProfileItem> {
+        val effectiveSubId = targetSubId ?: activeProfile?.subscriptionId
+        val effectiveRegex = targetFilterRegex ?: activeProfile?.smartPoolFilterRegex ?: run {
+            val sel = MmkvManager.getSelectServer()
+            if (!sel.isNullOrBlank()) MmkvManager.decodeServerConfig(sel)?.smartPoolFilterRegex else null
+        }
+        val allGuids = if (effectiveSubId.isNullOrBlank()) {
+            getAllServerGuids()
+        } else {
+            MmkvManager.decodeServerList(effectiveSubId)
+        }
         val raw = allGuids.mapNotNull { MmkvManager.decodeServerConfig(it) }
             .filter { it.configType != EConfigType.SMART_POOL && it.configType != EConfigType.CUSTOM }
-        return SmartPoolNodeFilter.filterAndDeduplicate(raw)
+        return SmartPoolNodeFilter.filterAndDeduplicate(raw, effectiveRegex)
     }
 
     fun onProxiesUpdated(subscriptionId: String = "") {
@@ -50,13 +64,10 @@ object SmartPoolManager {
         val countText = if (candidates.isNotEmpty()) " (${candidates.size} узлов)" else ""
         val poolRemarks = "${SmartPoolConstants.SMART_POOL_REMARKS}$countText"
 
-        if (subscriptionId.isNotBlank()) {
-            ensureSmartPoolInGroup(subscriptionId, poolRemarks)
+        val allSubIds = (listOf("", subscriptionId) + MmkvManager.decodeSubscriptions().map { it.guid }).distinct()
+        for (subId in allSubIds) {
+            ensureSmartPoolInGroup(subId, poolRemarks)
         }
-        MmkvManager.decodeSubscriptions().forEach { sub ->
-            ensureSmartPoolInGroup(sub.guid, poolRemarks)
-        }
-        ensureSmartPoolInGroup("", poolRemarks)
 
         if (balancer != null && candidates.isNotEmpty()) {
             val bal = SmartPoolBalancer(candidates)
@@ -68,7 +79,7 @@ object SmartPoolManager {
             bal.getCurrentLeader()?.let { leader ->
                 com.v2ray.ang.handler.NotificationManager.updateTitle("${SmartPoolConstants.SMART_POOL_REMARKS} → ${leader.profile.remarks}")
             }
-            LogUtil.i(SmartPoolConstants.TAG, "SmartPool live-reloaded with ${candidates.size} nodes")
+            LogUtil.i(SmartPoolConstants.TAG, "🔥 [Hot-Reload] SmartPool успешно обновлен нагорячую без перезапуска Xray! Доступно ${candidates.size} нод, Активный лидер: '${bal.getCurrentLeader()?.profile?.remarks}'")
         }
     }
 
@@ -153,8 +164,9 @@ object SmartPoolManager {
     fun onCoreStarting(context: Context, profile: ProfileItem) {
         if (!isSmartPoolConfig(profile)) return
         stop()
+        activeProfile = profile
         LogUtil.i(SmartPoolConstants.TAG, "Starting SmartPool Manager...")
-        val candidates = getValidPoolCandidates()
+        val candidates = getValidPoolCandidates(profile.smartPoolFilterRegex, profile.subscriptionId)
         val bal = SmartPoolBalancer(candidates)
         bal.onLeaderChanged = { leader ->
             com.v2ray.ang.handler.NotificationManager.updateTitle("${SmartPoolConstants.SMART_POOL_REMARKS} → ${leader.profile.remarks}")
@@ -165,12 +177,22 @@ object SmartPoolManager {
         dispatcher = disp
         disp.start()
 
-        val prb = SmartPoolProber(bal)
+        val probeInterval = SmartPoolSubAutoUpdater.parseIntervalToMillis(profile.smartPoolInterval)
+        val tolerance = profile.smartPoolTolerance ?: 30.0
+        val prb = SmartPoolProber(bal, probeInterval, tolerance)
         prober = prb
         prb.start()
+
+        val subUpdateStr = profile.smartPoolSubUpdateInterval
+        val updater = SmartPoolSubAutoUpdater(profile.subscriptionId, subUpdateStr)
+        autoUpdater = updater
+        updater.start()
     }
 
     fun stop() {
+        activeProfile = null
+        autoUpdater?.stop()
+        autoUpdater = null
         dispatcher?.stop()
         dispatcher = null
         prober?.stop()

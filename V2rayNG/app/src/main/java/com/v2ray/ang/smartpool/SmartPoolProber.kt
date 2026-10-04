@@ -12,7 +12,11 @@ import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.URL
 
-class SmartPoolProber(private val balancer: SmartPoolBalancer) {
+class SmartPoolProber(
+    private val balancer: SmartPoolBalancer,
+    private val probeIntervalMs: Long = 20000L,
+    private val toleranceMs: Double = 0.0
+) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var running = false
 
@@ -28,7 +32,7 @@ class SmartPoolProber(private val balancer: SmartPoolBalancer) {
 
     private suspend fun probeLoop() {
         while (scope.isActive && running) {
-            delay(20000L)
+            delay(probeIntervalMs)
             runCatching { probeHotGroup() }
             if (balancer.needsReplenishment()) {
                 runCatching { recruitFromColdPool() }
@@ -61,7 +65,7 @@ class SmartPoolProber(private val balancer: SmartPoolBalancer) {
         }
 
         if (alive.isNotEmpty()) {
-            balancer.updateStandbys(alive)
+            balancer.updateStandbys(alive, toleranceMs)
             LogUtil.i(SmartPoolConstants.TAG, "⚡ [Балансировщик] Проверен горячий пул: ${alive.size} узлов | Активный Лидер: ${balancer.getCurrentLeader()?.profile?.remarks} (порт: ${balancer.getCurrentLeader()?.localPort})")
         }
     }

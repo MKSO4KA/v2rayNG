@@ -68,6 +68,12 @@ data class ProfileItem(
 
 
     var browserDialerMode: String? = null,
+    var smartPoolFilterRegex: String? = null,
+    var smartPoolInterval: String? = null,
+    var smartPoolTolerance: Double? = null,
+    var smartPoolPolicyType: String? = null,
+    var smartPoolValidationMethod: String? = null,
+    var smartPoolSubUpdateInterval: String? = null,
 ) {
 
     companion object {

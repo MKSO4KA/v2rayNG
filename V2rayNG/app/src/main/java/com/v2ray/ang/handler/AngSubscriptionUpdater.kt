@@ -29,6 +29,7 @@ object AngSubscriptionUpdater {
         if (!Utils.isValidUrl(url) || (!it.subscription.allowInsecureUrl && !Utils.isValidSubUrl(url))) {
             return SubscriptionUpdateResult(failureCount = 1)
         }
+        LogUtil.i(com.v2ray.ang.smartpool.SmartPoolConstants.TAG, "📥 [Подписка] Запрос обновления: '${it.subscription.remarks}' (URL: $url)")
         val req = UrlContentRequest(
             url = url,
             userAgent = it.subscription.userAgent,
@@ -53,9 +54,26 @@ object AngSubscriptionUpdater {
                 )
             }.getOrDefault("")
         }
-        if (configText.isEmpty()) return SubscriptionUpdateResult(failureCount = 1)
+        if (configText.isEmpty()) {
+            LogUtil.w(com.v2ray.ang.smartpool.SmartPoolConstants.TAG, "❌ [Подписка] Не удалось получить контент для '${it.subscription.remarks}'")
+            return SubscriptionUpdateResult(failureCount = 1)
+        }
+
         val count = parseConfigViaSub(configText, it.guid, false)
+        LogUtil.i(com.v2ray.ang.smartpool.SmartPoolConstants.TAG, "📋 [Подписка] Распарсено $count узлов для группы '${it.subscription.remarks}'")
         return if (count > 0) {
+            val serverGuids = MmkvManager.decodeServerList(it.guid)
+            val parsedNodes = serverGuids.mapNotNull { guid -> MmkvManager.decodeServerConfig(guid) }
+            val newHash = parsedNodes.map { node -> com.v2ray.ang.smartpool.SmartNodeHasher.computeNodeHash(node) }
+                .sorted().joinToString(",").let { joined -> com.v2ray.ang.smartpool.SmartPoolSubAutoUpdater.computeHash(joined) }
+            val oldHashKey = "sub_nodes_hash_${it.guid}"
+            val oldHash = MmkvManager.decodeSettingsString(oldHashKey)
+            if (oldHash != null && oldHash == newHash) {
+                LogUtil.i(com.v2ray.ang.smartpool.SmartPoolConstants.TAG, "🔍 [Сверка хэша] Хэши всех ${parsedNodes.size} нод подписки '${it.subscription.remarks}' идентичны (${newHash.take(10)}...). Структурных изменений нет.")
+            } else {
+                LogUtil.i(com.v2ray.ang.smartpool.SmartPoolConstants.TAG, "⚡ [Сверка хэша] Обнаружены изменения в составе нод '${it.subscription.remarks}'! Старый хэш: ${oldHash?.take(10) ?: "none"}, Новый: ${newHash.take(10)}...")
+                MmkvManager.encodeSettings(oldHashKey, newHash)
+            }
             com.v2ray.ang.smartpool.SmartPoolManager.onProxiesUpdated(it.guid)
             it.subscription.lastUpdated = System.currentTimeMillis()
             MmkvManager.encodeSubscription(it.guid, it.subscription)

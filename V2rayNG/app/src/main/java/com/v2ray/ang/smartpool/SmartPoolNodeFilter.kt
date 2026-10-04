@@ -32,12 +32,17 @@ object SmartPoolNodeFilter {
         return "$proto://$host:$port#u=$user#k=$key"
     }
 
-    fun filterAndDeduplicate(nodes: List<ProfileItem>): List<ProfileItem> {
+    fun filterAndDeduplicate(nodes: List<ProfileItem>, filterRegex: String? = null): List<ProfileItem> {
         val validNodes = nodes.filter { isValidProxyNode(it) }
+        val candidates = if (!filterRegex.isNullOrBlank()) {
+            SmartRegexMatcher.filter(filterRegex, validNodes)
+        } else {
+            validNodes
+        }
         val seenEndpoints = mutableMapOf<String, ProfileItem>()
         val unique = mutableListOf<ProfileItem>()
 
-        for (node in validNodes) {
+        for (node in candidates) {
             val endpKey = extractPhysicalEndpointKey(node)
             val existing = seenEndpoints[endpKey]
             if (existing != null) {

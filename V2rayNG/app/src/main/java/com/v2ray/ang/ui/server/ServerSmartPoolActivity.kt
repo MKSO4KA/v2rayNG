@@ -24,6 +24,7 @@ import com.v2ray.ang.ui.compose.FormTextField
 
 class ServerSmartPoolActivity : BaseComponentActivity() {
     private val editGuid by lazy { intent.getStringExtra("guid").orEmpty() }
+    private val currentSubscriptionId by lazy { intent.getStringExtra("subscriptionId").orEmpty() }
     private val isRunning by lazy {
         intent.getBooleanExtra("isRunning", false) && editGuid.isNotEmpty() && editGuid == MmkvManager.getSelectServer()
     }
@@ -31,32 +32,22 @@ class ServerSmartPoolActivity : BaseComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        initialConfig = MmkvManager.decodeServerConfig(editGuid) ?: ProfileItem.create(EConfigType.SMART_POOL)
+        initialConfig = MmkvManager.decodeServerConfig(editGuid) ?: ProfileItem.create(EConfigType.SMART_POOL).apply {
+            subscriptionId = currentSubscriptionId
+        }
     }
 
     @Composable
     override fun ScreenContent() {
-        val uiState = remember { SmartPoolUiState.fromProfileItem(initialConfig) }
+        val uiState = remember { SmartPoolUiState.fromProfileItem(initialConfig, currentSubscriptionId) }
         val allSubs = remember { MmkvManager.decodeSubscriptions() }
-
-        val subOptions = remember(allSubs) {
-            listOf("Все группы") + allSubs.map { it.subscription.remarks }
+        val subOptions = remember(allSubs) { listOf("Все группы") + allSubs.map { it.subscription.remarks } }
+        val allNodes = remember(uiState.targetSubId) {
+            val guids = if (uiState.targetSubId.isBlank()) SmartPoolManager.getAllServerGuids() else MmkvManager.decodeServerList(uiState.targetSubId)
+            guids.mapNotNull { MmkvManager.decodeServerConfig(it) }.filter { it.configType != EConfigType.SMART_POOL && it.configType != EConfigType.CUSTOM }
         }
-
-        val allNodes = remember(uiState.subscriptionId) {
-            val guids = if (uiState.subscriptionId.isBlank()) {
-                SmartPoolManager.getAllServerGuids()
-            } else {
-                MmkvManager.decodeServerList(uiState.subscriptionId)
-            }
-            guids.mapNotNull { MmkvManager.decodeServerConfig(it) }
-                .filter { it.configType != EConfigType.SMART_POOL && it.configType != EConfigType.CUSTOM }
-        }
-
         val matchedNodes by remember(allNodes, uiState.filterRegex) {
-            derivedStateOf {
-                SmartPoolNodeFilter.filterAndDeduplicate(allNodes, uiState.filterRegex)
-            }
+            derivedStateOf { SmartPoolNodeFilter.filterAndDeduplicate(allNodes, uiState.filterRegex) }
         }
 
         ServerEditorScaffold(
@@ -69,101 +60,35 @@ class ServerSmartPoolActivity : BaseComponentActivity() {
             onDeleteClick = { deleteServer(editGuid) }
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                FormTextField(
-                    label = stringResource(R.string.server_lab_remarks),
-                    value = uiState.remarks,
-                    onValueChange = { uiState.remarks = it },
-                    isError = uiState.isRemarksError
-                )
-
-                val policyLabels = listOf(
-                    stringResource(R.string.smartpool_policy_lowest_latency),
-                    stringResource(R.string.smartpool_policy_random),
-                    stringResource(R.string.smartpool_policy_round_robin)
-                )
+                FormTextField(label = stringResource(R.string.server_lab_remarks), value = uiState.remarks, onValueChange = { uiState.remarks = it }, isError = uiState.isRemarksError)
+                val policyLabels = listOf(stringResource(R.string.smartpool_policy_lowest_latency), stringResource(R.string.smartpool_policy_random), stringResource(R.string.smartpool_policy_round_robin))
                 val currentPolicyLabel = when (uiState.policyType) {
                     SmartPoolUiState.POLICY_RANDOM -> stringResource(R.string.smartpool_policy_random)
                     SmartPoolUiState.POLICY_ROUND_ROBIN -> stringResource(R.string.smartpool_policy_round_robin)
                     else -> stringResource(R.string.smartpool_policy_lowest_latency)
                 }
-                FormDropdownField(
-                    label = stringResource(R.string.smartpool_policy_type),
-                    value = currentPolicyLabel,
-                    options = policyLabels,
-                    onValueChange = { selected ->
-                        uiState.policyType = when (selected) {
-                            policyLabels[1] -> SmartPoolUiState.POLICY_RANDOM
-                            policyLabels[2] -> SmartPoolUiState.POLICY_ROUND_ROBIN
-                            else -> SmartPoolUiState.POLICY_LOWEST_LATENCY
-                        }
+                FormDropdownField(label = stringResource(R.string.smartpool_policy_type), value = currentPolicyLabel, options = policyLabels, onValueChange = { sel ->
+                    uiState.policyType = when (sel) {
+                        policyLabels[1] -> SmartPoolUiState.POLICY_RANDOM
+                        policyLabels[2] -> SmartPoolUiState.POLICY_ROUND_ROBIN
+                        else -> SmartPoolUiState.POLICY_LOWEST_LATENCY
                     }
-                )
-
-                val currentSubName = if (uiState.subscriptionId.isBlank()) {
-                    "Все группы"
-                } else {
-                    allSubs.firstOrNull { it.guid == uiState.subscriptionId }?.subscription?.remarks ?: "Все группы"
-                }
-                FormDropdownField(
-                    label = stringResource(R.string.smartpool_source_group),
-                    value = currentSubName,
-                    options = subOptions,
-                    onValueChange = { chosenName ->
-                        val targetSub = allSubs.firstOrNull { it.subscription.remarks == chosenName }
-                        uiState.subscriptionId = targetSub?.guid.orEmpty()
-                    }
-                )
-
-                FormTextField(
-                    label = stringResource(R.string.smartpool_filter_regex),
-                    value = uiState.filterRegex,
-                    onValueChange = {
-                        uiState.filterRegex = it
-                        uiState.isRegexError = it.isNotBlank() && SmartRegexMatcher.compileSafe(it) == null
-                    },
-                    isError = uiState.isRegexError,
-                    placeholder = "^(?!.*{flag:RU})(?!.*(?i)(?:ост|left|expire)).+$",
-                    supportingText = if (uiState.isRegexError) "Некорректный синтаксис регулярного выражения" else null
-                )
-
-                FormTextField(
-                    label = stringResource(R.string.smartpool_interval),
-                    value = uiState.interval,
-                    onValueChange = { uiState.interval = it }
-                )
-
-                FormTextField(
-                    label = stringResource(R.string.smartpool_tolerance),
-                    value = uiState.tolerance,
-                    onValueChange = { uiState.tolerance = it }
-                )
-
-                val valMethods = listOf(
-                    stringResource(R.string.smartpool_val_normal_ping),
-                    stringResource(R.string.smartpool_val_okhttp)
-                )
+                })
+                val currentSubName = if (uiState.targetSubId.isBlank()) "Все группы" else allSubs.firstOrNull { it.guid == uiState.targetSubId }?.subscription?.remarks ?: "Все группы"
+                FormDropdownField(label = stringResource(R.string.smartpool_source_group), value = currentSubName, options = subOptions, onValueChange = { chosen ->
+                    uiState.targetSubId = allSubs.firstOrNull { it.subscription.remarks == chosen }?.guid.orEmpty()
+                })
+                FormTextField(label = stringResource(R.string.smartpool_filter_regex), value = uiState.filterRegex, onValueChange = { uiState.filterRegex = it; uiState.isRegexError = it.isNotBlank() && SmartRegexMatcher.compileSafe(it) == null }, isError = uiState.isRegexError, placeholder = "^(?!.*{flag:RU}).+$")
+                FormTextField(label = stringResource(R.string.smartpool_port_limit), value = uiState.portLimit, onValueChange = { uiState.portLimit = it }, placeholder = "128, 256, 512, 1024")
+                FormTextField(label = stringResource(R.string.smartpool_interval), value = uiState.interval, onValueChange = { uiState.interval = it })
+                FormTextField(label = stringResource(R.string.smartpool_tolerance), value = uiState.tolerance, onValueChange = { uiState.tolerance = it })
+                val valMethods = listOf(stringResource(R.string.smartpool_val_normal_ping), stringResource(R.string.smartpool_val_okhttp))
                 val currentValMethod = if (uiState.validationMethod == SmartPoolUiState.METHOD_OKHTTP) valMethods[1] else valMethods[0]
-                FormDropdownField(
-                    label = stringResource(R.string.smartpool_validation_method),
-                    value = currentValMethod,
-                    options = valMethods,
-                    onValueChange = { selected ->
-                        uiState.validationMethod = if (selected == valMethods[1]) SmartPoolUiState.METHOD_OKHTTP else SmartPoolUiState.METHOD_NORMAL_PING
-                    }
-                )
-
-                FormTextField(
-                    label = stringResource(R.string.smartpool_sub_update_interval),
-                    value = uiState.subUpdateInterval,
-                    onValueChange = { uiState.subUpdateInterval = it },
-                    placeholder = "e.g. 60m"
-                )
-
-                SmartPoolMatchedList(
-                    matchedNodes = matchedNodes,
-                    interval = uiState.interval,
-                    tolerance = uiState.tolerance
-                )
+                FormDropdownField(label = stringResource(R.string.smartpool_validation_method), value = currentValMethod, options = valMethods, onValueChange = { sel ->
+                    uiState.validationMethod = if (sel == valMethods[1]) SmartPoolUiState.METHOD_OKHTTP else SmartPoolUiState.METHOD_NORMAL_PING
+                })
+                FormTextField(label = stringResource(R.string.smartpool_sub_update_interval), value = uiState.subUpdateInterval, onValueChange = { uiState.subUpdateInterval = it }, placeholder = "e.g. 60m")
+                SmartPoolMatchedList(matchedNodes = matchedNodes, interval = uiState.interval, tolerance = uiState.tolerance)
             }
         }
     }
@@ -171,10 +96,12 @@ class ServerSmartPoolActivity : BaseComponentActivity() {
     private fun saveSmartPool(state: SmartPoolUiState): Boolean {
         state.isRemarksError = state.remarks.isBlank()
         if (state.isRemarksError) return false
-
         val config = state.toProfileItem(initialConfig)
+        if (config.subscriptionId.isBlank() && currentSubscriptionId.isNotBlank()) {
+            config.subscriptionId = currentSubscriptionId
+        }
         val savedGuid = MmkvManager.encodeServerConfig(editGuid, config)
-        SmartPoolManager.onProxiesUpdated(state.subscriptionId)
+        SmartPoolManager.onProxiesUpdated(state.targetSubId)
         toastSuccess(R.string.toast_success)
         ProfileEditorResult.finishSaved(this, savedGuid, isRunning)
         return true

@@ -74,6 +74,8 @@ data class ProfileItem(
     var smartPoolPolicyType: String? = null,
     var smartPoolValidationMethod: String? = null,
     var smartPoolSubUpdateInterval: String? = null,
+    var smartPoolPortLimit: Int? = null,
+    var smartPoolTargetSubId: String? = null,
 ) {
 
     companion object {

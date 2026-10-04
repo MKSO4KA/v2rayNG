@@ -15,47 +15,33 @@ import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.Utils
 
 object SmartPoolConfigBuilder {
-
     private const val DEFAULT_TEMPLATE = """
     {
       "log": { "loglevel": "error" },
       "dns": {
         "queryStrategy": "UseIP",
-        "servers": [
-          "tcp+local://1.1.1.1:53",
-          "8.8.8.8",
-          "1.1.1.1",
-          "localhost"
-        ]
+        "servers": ["tcp+local://1.1.1.1:53", "8.8.8.8", "1.1.1.1", "localhost"]
       },
-      "inbounds": [
-        {
-          "tag": "in-template",
-          "listen": "127.0.0.1",
-          "port": 10808,
-          "protocol": "socks",
-          "settings": { "auth": "noauth", "udp": true },
-          "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] }
-        }
-      ],
+      "inbounds": [{
+        "tag": "in-template", "listen": "127.0.0.1", "port": 10808, "protocol": "socks",
+        "settings": { "auth": "noauth", "udp": true },
+        "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] }
+      }],
       "outbounds": [],
-      "routing": {
-        "domainStrategy": "IPIfNonMatch",
-        "rules": []
-      }
+      "routing": { "domainStrategy": "IPIfNonMatch", "rules": [] }
     }
     """
 
     fun buildContext(context: Context, guid: String, profile: ProfileItem): CoreConfigContext {
-        return CoreConfigContext(
-            context = context,
-            guid = guid,
-            isCustom = true
-        )
+        return CoreConfigContext(context = context, guid = guid, isCustom = true)
     }
 
-    fun buildMultiInboundConfig(context: Context?, rawNodes: List<ProfileItem>): V2rayConfig {
-        val validNodes = SmartPoolNodeFilter.filterAndDeduplicate(rawNodes)
+    fun buildMultiInboundConfig(
+        context: Context?,
+        rawNodes: List<ProfileItem>,
+        maxPorts: Int = SmartPoolConstants.DEFAULT_PORT_LIMIT
+    ): V2rayConfig {
+        val validNodes = SmartPoolNodeFilter.filterAndDeduplicate(rawNodes).take(maxPorts)
         val asset = context?.let { runCatching { Utils.readTextFromAssets(it, "v2ray_config.json") }.getOrNull() }
         val jsonText = if (!asset.isNullOrBlank()) asset else DEFAULT_TEMPLATE
         val v2rayConfig = JsonUtil.fromJson(jsonText, V2rayConfig::class.java)
@@ -79,9 +65,7 @@ object SmartPoolConfigBuilder {
 
             val inBean = if (templateInboundJson != null) {
                 JsonUtil.fromJson(templateInboundJson, InboundBean::class.java)
-            } else {
-                null
-            }
+            } else null
 
             if (inBean != null) {
                 inBean.tag = inTag
@@ -108,42 +92,13 @@ object SmartPoolConfigBuilder {
             if (outbound != null) {
                 outbound.tag = outTag
                 v2rayConfig.outbounds.add(outbound)
-
-                v2rayConfig.routing.rules.add(
-                    RulesBean(
-                        type = "field",
-                        inboundTag = arrayListOf(inTag),
-                        outboundTag = outTag
-                    )
-                )
+                v2rayConfig.routing.rules.add(RulesBean(type = "field", inboundTag = arrayListOf(inTag), outboundTag = outTag))
             }
         }
 
-
-        v2rayConfig.outbounds.add(
-            OutboundBean(
-                protocol = "freedom",
-                tag = "direct",
-                settings = OutboundBean.OutSettingsBean(),
-                streamSettings = StreamSettingsBean()
-            )
-        )
-        v2rayConfig.outbounds.add(
-            OutboundBean(
-                protocol = "blackhole",
-                tag = "block",
-                settings = OutboundBean.OutSettingsBean(),
-                streamSettings = StreamSettingsBean()
-            )
-        )
-
-        v2rayConfig.routing.rules.add(
-            RulesBean(
-                outboundTag = AppConfig.TAG_DIRECT,
-                ip = ArrayList(AppConfig.PRIVATE_IP_LIST)
-            )
-        )
-
+        v2rayConfig.outbounds.add(OutboundBean(protocol = "freedom", tag = "direct", settings = OutboundBean.OutSettingsBean(), streamSettings = StreamSettingsBean()))
+        v2rayConfig.outbounds.add(OutboundBean(protocol = "blackhole", tag = "block", settings = OutboundBean.OutSettingsBean(), streamSettings = StreamSettingsBean()))
+        v2rayConfig.routing.rules.add(RulesBean(outboundTag = AppConfig.TAG_DIRECT, ip = ArrayList(AppConfig.PRIVATE_IP_LIST)))
         CoreConfigDomainResolver.resolveOutboundDomainsToHosts(v2rayConfig)
         return v2rayConfig
     }

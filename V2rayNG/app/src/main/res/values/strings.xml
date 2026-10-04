@@ -47,6 +47,7 @@
     <string name="menu_item_import_config_manually_trojan">Add [Trojan]</string>
     <string name="menu_item_import_config_manually_wireguard">Add [WireGuard]</string>
     <string name="menu_item_import_config_manually_hysteria2">Add [Hysteria2]</string>
+    <string name="menu_item_import_config_manually_smartpool">Add [Smart Pool]</string>
     <string name="confirm_delete_visible_profiles">Are you sure you want to delete all profiles currently shown?</string>
     <string name="confirm_delete_duplicate_profiles">Are you sure you want to delete all duplicate profiles currently shown?</string>
     <string name="confirm_delete_invalid_profiles">Please test the profiles first. Are you sure you want to delete all invalid profiles currently shown?</string>
@@ -405,5 +406,6 @@
     <string name="smartpool_val_normal_ping">Normal (Ping)</string>
     <string name="smartpool_val_okhttp">OkHttp (HTTP Ping)</string>
     <string name="smartpool_sub_update_interval">Subscription auto-update interval [Optional]</string>
+    <string name="smartpool_port_limit">Max Active Ports Limit (16-1024)</string>
 
 </resources>

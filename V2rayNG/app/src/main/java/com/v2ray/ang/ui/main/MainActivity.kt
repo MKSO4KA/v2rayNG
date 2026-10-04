@@ -90,7 +90,6 @@ class MainActivity : HelperBaseComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        SmartPoolManager.ensureDefaultSmartPoolNode()
         mainViewModel.onAction(MainAction.Initialize)
         mainViewModel.setupGroupTab(true)
 

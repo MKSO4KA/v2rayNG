@@ -8,17 +8,23 @@ import com.v2ray.ang.dto.CoreConfigContext
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.util.JsonUtil
+import com.v2ray.ang.util.LogUtil
 
 object CoreConfigCustomBuilder {
     fun buildV2rayCustomConfig(configContext: CoreConfigContext, initConfigFn: (CoreConfigContext) -> com.v2ray.ang.dto.V2rayConfig): ConfigResult {
-        val raw = MmkvManager.decodeServerRaw(configContext.guid)
-            ?: return ConfigResult(status = false, guid = configContext.guid, errorMessage = "Failed to build config context, config is empty")
-        
         val config = MmkvManager.decodeServerConfig(configContext.guid)
         if (config?.configType == com.v2ray.ang.enums.EConfigType.SMART_POOL) {
-            val poolJson = com.v2ray.ang.smartpool.SmartPoolManager.generateMultiInboundJson(configContext.context)
+            val targetSub = config.smartPoolTargetSubId ?: config.subscriptionId
+            val limit = config.smartPoolPortLimit ?: com.v2ray.ang.smartpool.SmartPoolConstants.DEFAULT_PORT_LIMIT
+            val candidates = com.v2ray.ang.smartpool.SmartPoolManager.getValidPoolCandidates(config.smartPoolFilterRegex, targetSub)
+            LogUtil.i(AppConfig.TAG, "SmartPool: building multi-inbound config for '${config.remarks}', found ${candidates.size} nodes (limit: $limit)")
+            val v2rayConfig = com.v2ray.ang.smartpool.SmartPoolConfigBuilder.buildMultiInboundConfig(configContext.context, candidates, limit)
+            val poolJson = JsonUtil.toJsonPretty(v2rayConfig).orEmpty()
             return ConfigResult(status = true, guid = configContext.guid, content = poolJson)
         }
+
+        val raw = MmkvManager.decodeServerRaw(configContext.guid)
+            ?: return ConfigResult(status = false, guid = configContext.guid, errorMessage = "Failed to build config context, config is empty")
 
         val result = ConfigResult(true, configContext.guid, raw)
         val json = JsonUtil.parseString(raw)?.takeIf { it.isJsonObject }?.asJsonObject ?: return result

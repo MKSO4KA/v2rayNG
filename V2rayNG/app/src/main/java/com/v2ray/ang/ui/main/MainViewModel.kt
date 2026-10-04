@@ -112,7 +112,6 @@ class MainViewModel(application: Application, private val dataSource: MainDataSo
     fun onAction(action: MainAction) {
         when (action) {
             MainAction.Initialize -> viewModelScope.launch(preloadDispatcher) {
-                SmartPoolManager.ensureDefaultSmartPoolNode()
                 initialPageReady.await()
                 delay(32)
                 dataSource.initAssets()

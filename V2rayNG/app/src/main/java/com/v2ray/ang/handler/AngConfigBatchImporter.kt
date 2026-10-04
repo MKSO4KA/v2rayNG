@@ -64,6 +64,24 @@ object AngConfigBatchImporter {
 
     fun parseCustomConfigServer(server: String?, subid: String, append: Boolean): Int {
         if (server == null) return 0
+        val smartNodes = com.v2ray.ang.smartpool.SmartSubFetcher.parseNodesFromPayload(server)
+        if (smartNodes.isNotEmpty()) {
+            val subItem = MmkvManager.decodeSubscription(subid)
+            val filteredNodes = if (subItem?.filter.isNotNullEmpty()) {
+                smartNodes.filter { Regex(subItem?.filter.orEmpty()).containsMatchIn(it.remarks) }
+            } else {
+                smartNodes
+            }
+            if (filteredNodes.isNotEmpty()) {
+                val configs = filteredNodes.map { node ->
+                    node.subscriptionId = subid
+                    node.description = AngConfigManager.generateDescription(node)
+                    ParsedProfile(node)
+                }
+                commitProfiles(configs, subid, append)
+                return configs.size
+            }
+        }
         if (server.contains("inbounds") && server.contains("outbounds") && server.contains("routing")) {
             val serverList: Array<Any> = JsonUtil.fromJson(server, Array<Any>::class.java) ?: arrayOf()
             if (serverList.isNotEmpty()) {

@@ -102,6 +102,18 @@ object AngSubscriptionUpdater {
     fun parseConfigViaSub(server: String?, subid: String, append: Boolean): Int {
         var count = AngConfigBatchImporter.parseBatchConfig(Utils.decode(server), subid, append)
         if (count <= 0) count = AngConfigBatchImporter.parseBatchConfig(server, subid, append)
+        if (count <= 0) {
+            val smartNodes = com.v2ray.ang.smartpool.SmartSubFetcher.parseNodesFromPayload(server.orEmpty())
+            if (smartNodes.isNotEmpty()) {
+                val parsedProfiles = smartNodes.map { node ->
+                    node.subscriptionId = subid
+                    node.description = AngConfigManager.generateDescription(node)
+                    AngConfigBatchImporter.ParsedProfile(node)
+                }
+                AngConfigBatchImporter.commitProfiles(parsedProfiles, subid, append)
+                count = smartNodes.size
+            }
+        }
         if (count <= 0) count = AngConfigBatchImporter.parseCustomConfigServer(server, subid, append)
         return count
     }

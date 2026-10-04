@@ -112,18 +112,56 @@ object SmartSubFetcher {
         return result
     }
 
+    private fun isGenericTag(tag: String?): Boolean {
+        if (tag.isNullOrBlank()) return true
+        val lower = tag.lowercase(java.util.Locale.ROOT)
+        return lower == "proxy" || lower == "direct" || lower == "block" || lower == "dns" ||
+                lower.startsWith("proxy-") || lower.startsWith("proxy_") ||
+                (lower.startsWith("proxy") && lower.drop(5).all { it.isDigit() }) ||
+                lower.startsWith("node-") || lower.startsWith("node_")
+    }
+
     private fun extractOutboundsFromJson(jsonObjStr: String, fallbackRemarks: String): List<ProfileItem> {
         val list = mutableListOf<ProfileItem>()
         val root = com.v2ray.ang.util.JsonUtil.fromJson(jsonObjStr, Map::class.java) ?: return emptyList()
-        val remarks = (root["remarks"] as? String)?.takeIf { it.isNotBlank() } ?: fallbackRemarks
+        val rootRemarks = ((root["remarks"] ?: root["name"] ?: root["ps"]) as? String)?.takeIf { it.isNotBlank() }
+        val defaultRemarks = rootRemarks ?: fallbackRemarks
 
         val outbounds = root["outbounds"] as? List<*> ?: return emptyList()
+
+        // Проход 1: Собираем карту красивых названий из селекторов и групп
+        val tagToFriendlyName = mutableMapOf<String, String>()
         for (item in outbounds) {
             val ob = item as? Map<*, *> ?: continue
-            val proto = (ob["protocol"] as? String)?.lowercase(java.util.Locale.ROOT) ?: continue
-            if (proto == "freedom" || proto == "blackhole" || proto.isBlank()) continue
+            val proto = ((ob["protocol"] as? String) ?: (ob["type"] as? String))?.lowercase(java.util.Locale.ROOT)
+            if (proto == "selector" || proto == "urltest" || proto == "loadbalance" || proto == "fallback") {
+                val selectorTag = (ob["tag"] as? String)?.trim() ?: continue
+                val targets = ob["outbounds"] as? List<*> ?: continue
+                for (target in targets) {
+                    val targetTag = target as? String ?: continue
+                    if (!SmartPoolNodeFilter.isAutoGroupNode(selectorTag) && !tagToFriendlyName.containsKey(targetTag)) {
+                        tagToFriendlyName[targetTag] = selectorTag
+                    }
+                }
+            }
+        }
 
-            val outboundRemarks = (ob["tag"] as? String)?.takeIf { it.isNotBlank() && it != "proxy" } ?: remarks
+        // Проход 2: Создаем профили для реальных физических прокси
+        for (item in outbounds) {
+            val ob = item as? Map<*, *> ?: continue
+            val proto = ((ob["protocol"] as? String) ?: (ob["type"] as? String))?.lowercase(java.util.Locale.ROOT) ?: continue
+            if (proto == "freedom" || proto == "blackhole" || proto == "direct" || proto == "block" || proto == "dns" || proto.isBlank()) continue
+            if (proto == "selector" || proto == "urltest" || proto == "loadbalance" || proto == "fallback") continue
+
+            val tag = ob["tag"] as? String
+            val directName = ((ob["remarks"] ?: ob["name"] ?: ob["ps"]) as? String)?.takeIf { it.isNotBlank() }
+            val selectorName = tagToFriendlyName[tag]?.takeIf { it.isNotBlank() }
+            val outboundRemarks = directName
+                ?: selectorName
+                ?: rootRemarks
+                ?: tag?.takeIf { !isGenericTag(it) }
+                ?: defaultRemarks
+
             val profile = createProfileFromOutboundMap(ob, proto, outboundRemarks)
             if (profile != null) {
                 list.add(profile)
@@ -138,7 +176,7 @@ object SmartSubFetcher {
             "vmess" -> com.v2ray.ang.enums.EConfigType.VMESS
             "trojan" -> com.v2ray.ang.enums.EConfigType.TROJAN
             "shadowsocks" -> com.v2ray.ang.enums.EConfigType.SHADOWSOCKS
-            "hysteria", "hysteria2" -> com.v2ray.ang.enums.EConfigType.HYSTERIA2
+            "hysteria", "hysteria2", "hy2" -> com.v2ray.ang.enums.EConfigType.HYSTERIA2
             "wireguard" -> com.v2ray.ang.enums.EConfigType.WIREGUARD
             "socks" -> com.v2ray.ang.enums.EConfigType.SOCKS
             else -> return null
@@ -146,30 +184,66 @@ object SmartSubFetcher {
         val config = ProfileItem.create(eType)
         config.remarks = remarks
 
+        // Sing-box direct properties
+        config.server = (ob["server"] as? String)?.takeIf { it.isNotBlank() }
+        config.serverPort = ((ob["server_port"] as? Number)?.toInt()?.toString()) ?: (ob["server_port"] as? String)
+        config.password = (ob["uuid"] as? String) ?: (ob["password"] as? String) ?: (ob["auth"] as? String)
+        config.flow = ob["flow"] as? String
+        config.method = ob["method"] as? String
+
+        // Sing-box TLS / Reality structure
+        val tlsObj = ob["tls"] as? Map<*, *>
+        if (tlsObj != null) {
+            val tlsEnabled = (tlsObj["enabled"] as? Boolean) ?: true
+            if (tlsEnabled) {
+                config.security = com.v2ray.ang.AppConfig.TLS
+                config.sni = (tlsObj["server_name"] as? String) ?: (tlsObj["serverName"] as? String)
+                val utlsObj = tlsObj["utls"] as? Map<*, *>
+                config.fingerPrint = (utlsObj?.get("fingerprint") as? String) ?: (tlsObj["fingerprint"] as? String)
+                val realityObj = tlsObj["reality"] as? Map<*, *>
+                if (realityObj != null && (realityObj["enabled"] as? Boolean) != false) {
+                    config.security = com.v2ray.ang.AppConfig.REALITY
+                    config.publicKey = realityObj["public_key"] as? String ?: realityObj["publicKey"] as? String
+                    config.shortId = realityObj["short_id"] as? String ?: realityObj["shortId"] as? String
+                }
+            }
+        }
+
+        // Sing-box Transport structure
+        val transportObj = ob["transport"] as? Map<*, *>
+        if (transportObj != null) {
+            config.network = (transportObj["type"] as? String) ?: "tcp"
+            config.path = transportObj["path"] as? String
+            val headers = transportObj["headers"] as? Map<*, *>
+            config.host = (headers?.get("Host") as? String) ?: (headers?.get("host") as? String)
+            config.serviceName = (transportObj["service_name"] as? String) ?: (transportObj["serviceName"] as? String)
+        }
+
+        // Xray / V2ray settings
         val settings = ob["settings"] as? Map<*, *>
         if (settings != null) {
             val vnext = settings["vnext"] as? List<*>
             if (!vnext.isNullOrEmpty()) {
                 val first = vnext[0] as? Map<*, *>
-                config.server = first?.get("address") as? String
-                config.serverPort = (first?.get("port") as? Number)?.toInt()?.toString()
+                if (config.server.isNullOrBlank()) config.server = first?.get("address") as? String
+                if (config.serverPort.isNullOrBlank()) config.serverPort = (first?.get("port") as? Number)?.toInt()?.toString()
                 val users = first?.get("users") as? List<*>
                 if (!users.isNullOrEmpty()) {
                     val u = users[0] as? Map<*, *>
-                    config.password = u?.get("id") as? String
-                    config.method = (u?.get("encryption") as? String) ?: "none"
-                    config.flow = u?.get("flow") as? String
+                    if (config.password.isNullOrBlank()) config.password = u?.get("id") as? String
+                    if (config.method.isNullOrBlank()) config.method = (u?.get("encryption") as? String) ?: "none"
+                    if (config.flow.isNullOrBlank()) config.flow = u?.get("flow") as? String
                 }
             }
 
             val servers = settings["servers"] as? List<*>
             if (!servers.isNullOrEmpty()) {
                 val first = servers[0] as? Map<*, *>
-                config.server = first?.get("address") as? String
-                config.serverPort = (first?.get("port") as? Number)?.toInt()?.toString()
-                config.password = first?.get("password") as? String
-                config.method = first?.get("method") as? String
-                config.flow = first?.get("flow") as? String
+                if (config.server.isNullOrBlank()) config.server = first?.get("address") as? String
+                if (config.serverPort.isNullOrBlank()) config.serverPort = (first?.get("port") as? Number)?.toInt()?.toString()
+                if (config.password.isNullOrBlank()) config.password = first?.get("password") as? String
+                if (config.method.isNullOrBlank()) config.method = first?.get("method") as? String
+                if (config.flow.isNullOrBlank()) config.flow = first?.get("flow") as? String
             }
 
             if (config.server.isNullOrBlank()) {
@@ -179,23 +253,25 @@ object SmartSubFetcher {
             }
         }
 
+        // Xray / V2ray streamSettings
         val stream = ob["streamSettings"] as? Map<*, *>
         if (stream != null) {
-            config.network = (stream["network"] as? String) ?: "tcp"
-            config.security = stream["security"] as? String
+            config.network = (stream["network"] as? String) ?: config.network ?: "tcp"
+            config.security = (stream["security"] as? String) ?: config.security
 
             val reality = stream["realitySettings"] as? Map<*, *>
             if (reality != null) {
-                config.publicKey = reality["publicKey"] as? String
-                config.shortId = reality["shortId"] as? String
+                config.security = com.v2ray.ang.AppConfig.REALITY
+                config.publicKey = reality["publicKey"] as? String ?: reality["public_key"] as? String
+                config.shortId = reality["shortId"] as? String ?: reality["short_id"] as? String
                 config.spiderX = reality["spiderX"] as? String
                 config.fingerPrint = reality["fingerprint"] as? String
-                config.sni = reality["serverName"] as? String
+                config.sni = reality["serverName"] as? String ?: reality["server_name"] as? String
             }
 
             val tls = stream["tlsSettings"] as? Map<*, *>
             if (tls != null) {
-                config.sni = tls["serverName"] as? String
+                config.sni = tls["serverName"] as? String ?: tls["server_name"] as? String
                 config.fingerPrint = tls["fingerprint"] as? String
                 val alpn = tls["alpn"] as? List<*>
                 if (!alpn.isNullOrEmpty()) {

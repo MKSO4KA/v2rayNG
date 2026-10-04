@@ -95,3 +95,8 @@ pool.json
 **/rules.json
 **/blacklist.json
 **/pool.json
+
+# Subscription test dumps and diagnostic tests
+*sub_dump*
+sub_*_dump.*
+SmartSubscriptionLiveDiagnosticsTest.kt

@@ -11,7 +11,7 @@ object SmartPoolNodeFilter {
         val port = profile.serverPort?.toIntOrNull() ?: return false
         if (addr.isEmpty() || port <= 0 || port > 65535) return false
 
-        val blockedHosts = setOf("daysleft", "traffic", "expiry", "notice")
+        val blockedHosts = setOf("daysleft", "traffic", "expiry", "notice", "direct", "block")
         if (addr in blockedHosts) return false
 
         val remarks = profile.remarks.lowercase(Locale.ROOT)
@@ -59,6 +59,16 @@ object SmartPoolNodeFilter {
 
     fun isAutoGroupNode(remarks: String): Boolean {
         val lower = remarks.lowercase(Locale.ROOT)
-        return lower.contains("auto") || lower.contains("баланс") || lower.contains("групп")
+        return lower.contains("auto") ||
+                lower.contains("авто") ||
+                lower.contains("быстрая") ||
+                lower.contains("быстрый") ||
+                lower.contains("fastest") ||
+                lower.contains("баланс") ||
+                lower.contains("групп") ||
+                lower.contains("selector") ||
+                lower.contains("load balance") ||
+                lower.contains("wi-fi") ||
+                lower.contains("lte/4g")
     }
 }

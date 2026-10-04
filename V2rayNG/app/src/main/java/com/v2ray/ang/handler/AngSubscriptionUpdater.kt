@@ -10,6 +10,9 @@ import com.v2ray.ang.util.HttpUtil
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
 import java.net.URI
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 object AngSubscriptionUpdater {
     fun updateConfigViaSubAll(): SubscriptionUpdateResult {
@@ -82,6 +85,11 @@ object AngSubscriptionUpdater {
                 MmkvManager.encodeSettings(oldHashKey, newHash)
             }
             com.v2ray.ang.smartpool.SmartPoolManager.onProxiesUpdated(it.guid)
+            if (MmkvManager.decodeSettingsBool(AppConfig.PREF_GIST_AUTO_SYNC_ENABLED, true)) {
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    com.v2ray.ang.smartpool.gist.GistSyncManager.syncAllFromGist()
+                }
+            }
             it.subscription.lastUpdated = System.currentTimeMillis()
             com.v2ray.ang.smartpool.SubscriptionUpdateCoordinator.markUpdated(it.guid)
             MmkvManager.encodeSubscription(it.guid, it.subscription)

@@ -18,7 +18,9 @@ import kotlin.math.ceil
 class SmartPoolProber(
     private val balancer: SmartPoolBalancer,
     private val probeIntervalMs: Long = 20000L,
-    private val toleranceMs: Double = 0.0
+    private val toleranceMs: Double = 0.0,
+    private val customTestUrls: List<String> = emptyList(),
+    private val customBaselineUrl: String? = null
 ) {
     companion object {
         // Окно 59 минут (по 30 сек запаса с обеих сторон часа для стабилизации)
@@ -89,7 +91,8 @@ class SmartPoolProber(
     fun probeDirectBaseline() {
         val start = System.currentTimeMillis()
         try {
-            val conn = URL(SmartPoolConstants.BASELINE_TEST_URL).openConnection()
+            val baselineTarget = customBaselineUrl?.takeIf { it.isNotBlank() } ?: SmartPoolConstants.BASELINE_TEST_URL
+            val conn = URL(baselineTarget).openConnection()
             conn.connectTimeout = 3000
             conn.readTimeout = 3000
             conn.getInputStream().use { it.read(ByteArray(32)) }
@@ -136,7 +139,6 @@ class SmartPoolProber(
         if (coldCandidates.isEmpty()) return
 
         val now = System.currentTimeMillis()
-        // Исключаем ноды в активном кулдауне из борьбы за слот
         val availableCold = coldCandidates.filter { now >= it.cooldownUntil }
         if (availableCold.isEmpty()) return
 
@@ -169,16 +171,19 @@ class SmartPoolProber(
     }
 
     fun probeLocalSocks(localPort: Int): Long {
-        val start = System.currentTimeMillis()
-        return try {
-            val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", localPort))
-            val conn = URL(SmartPoolConstants.TEST_URL_FALLBACK).openConnection(proxy)
-            conn.connectTimeout = SmartPoolConstants.PROBE_TIMEOUT_MS.toInt()
-            conn.readTimeout = SmartPoolConstants.PROBE_TIMEOUT_MS.toInt()
-            conn.getInputStream().use { it.read(ByteArray(64)) }
-            System.currentTimeMillis() - start
-        } catch (_: Exception) {
-            -1L
+        val candidateUrls = if (customTestUrls.isNotEmpty()) customTestUrls else listOf(SmartPoolConstants.TEST_URL_FALLBACK)
+        for (probeUrl in candidateUrls) {
+            val start = System.currentTimeMillis()
+            val result = runCatching {
+                val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", localPort))
+                val conn = URL(probeUrl).openConnection(proxy)
+                conn.connectTimeout = SmartPoolConstants.PROBE_TIMEOUT_MS.toInt()
+                conn.readTimeout = SmartPoolConstants.PROBE_TIMEOUT_MS.toInt()
+                conn.getInputStream().use { it.read(ByteArray(64)) }
+                System.currentTimeMillis() - start
+            }.getOrDefault(-1L)
+            if (result > 0) return result
         }
+        return -1L
     }
 }

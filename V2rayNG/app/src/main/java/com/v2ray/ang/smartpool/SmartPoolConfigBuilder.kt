@@ -11,6 +11,7 @@ import com.v2ray.ang.dto.V2rayConfig.InboundBean
 import com.v2ray.ang.dto.V2rayConfig.OutboundBean
 import com.v2ray.ang.dto.V2rayConfig.RoutingBean.RulesBean
 import com.v2ray.ang.dto.entities.ProfileItem
+import com.v2ray.ang.smartpool.gist.GistSyncManager
 import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.Utils
 
@@ -57,6 +58,26 @@ object SmartPoolConfigBuilder {
         v2rayConfig.outbounds.clear()
         v2rayConfig.routing.rules.clear()
         v2rayConfig.routing.domainStrategy = "IPIfNonMatch"
+
+        val blacklistPatterns = GistSyncManager.getSavedBlacklistPatterns()
+        if (blacklistPatterns.isNotEmpty()) {
+            val domains = ArrayList<String>()
+            val ips = ArrayList<String>()
+            blacklistPatterns.forEach {
+                if (it.startsWith("ip:") || it.startsWith("geoip:")) ips.add(it)
+                else domains.add(it)
+            }
+            if (domains.isNotEmpty() || ips.isNotEmpty()) {
+                v2rayConfig.routing.rules.add(
+                    RulesBean(
+                        type = "field",
+                        outboundTag = "block",
+                        domain = if (domains.isNotEmpty()) domains else null,
+                        ip = if (ips.isNotEmpty()) ips else null
+                    )
+                )
+            }
+        }
 
         validNodes.forEachIndexed { i, node ->
             val port = SmartPoolConstants.BASE_POOL_PORT + i

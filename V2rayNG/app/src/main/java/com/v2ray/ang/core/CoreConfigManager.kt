@@ -108,6 +108,22 @@ object CoreConfigManager {
 
     private fun configureRouting(v2rayConfig: V2rayConfig) {
         v2rayConfig.routing.domainStrategy = "AsIs"
+        val blacklistPatterns = com.v2ray.ang.smartpool.gist.GistSyncManager.getSavedBlacklistPatterns()
+        if (blacklistPatterns.isNotEmpty()) {
+            val domains = ArrayList<String>()
+            val ips = ArrayList<String>()
+            blacklistPatterns.forEach {
+                if (it.startsWith("ip:") || it.startsWith("geoip:")) ips.add(it)
+                else domains.add(it)
+            }
+            if (domains.isNotEmpty() || ips.isNotEmpty()) {
+                v2rayConfig.routing.rules.add(0, V2rayConfig.RoutingBean.RulesBean(
+                    outboundTag = AppConfig.TAG_BLOCKED,
+                    domain = if (domains.isNotEmpty()) domains else null,
+                    ip = if (ips.isNotEmpty()) ips else null
+                ))
+            }
+        }
         v2rayConfig.routing.rules.add(V2rayConfig.RoutingBean.RulesBean(outboundTag = AppConfig.TAG_DIRECT, ip = AppConfig.PRIVATE_IP_LIST))
     }
 

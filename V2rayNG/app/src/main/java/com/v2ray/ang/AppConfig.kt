@@ -64,6 +64,12 @@ object AppConfig {
     const val PREF_AUTO_REMOVE_INVALID_AFTER_TEST = "pref_auto_remove_invalid_after_test"
     const val PREF_AUTO_SORT_AFTER_TEST = "pref_auto_sort_after_test"
     const val PREF_REAL_PING_CONCURRENCY = "pref_real_ping_concurrency"
+    const val PREF_GIST_RULES_URL = "pref_gist_rules_url"
+    const val PREF_GIST_POOL_URL = "pref_gist_pool_url"
+    const val PREF_GIST_BLACKLIST_URL = "pref_gist_blacklist_url"
+    const val PREF_QS_TILE_MODE = "pref_qs_tile_mode"
+    const val PREF_QS_TILE_TARGET_GUID = "pref_qs_tile_target_guid"
+    const val PREF_GIST_AUTO_SYNC_ENABLED = "pref_gist_auto_sync_enabled"
 
     /** Cache keys. */
     const val CACHE_SUBSCRIPTION_ID = "cache_subscription_id"

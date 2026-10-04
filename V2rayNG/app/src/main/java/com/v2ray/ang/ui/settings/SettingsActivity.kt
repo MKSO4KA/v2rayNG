@@ -89,6 +89,7 @@ fun SettingsScreen(
     var coreSettingsExpanded by rememberSaveable { mutableStateOf(true) }
     var advancedSettingsExpanded by rememberSaveable { mutableStateOf(true) }
     var modeSettingsExpanded by rememberSaveable { mutableStateOf(true) }
+    var gistSettingsExpanded by rememberSaveable { mutableStateOf(true) }
     val mode = MmkvManager.decodeSettingsString(AppConfig.PREF_MODE, VPN)
     val isVpn = mode == VPN
 
@@ -103,6 +104,7 @@ fun SettingsScreen(
             VpnSettingsGroup(vpnSettingsExpanded, { vpnSettingsExpanded = it }, isVpn)
             CoreSettingsGroup(coreSettingsExpanded) { coreSettingsExpanded = it }
             AdvancedSettingsGroup(advancedSettingsExpanded, { advancedSettingsExpanded = it }, systemVpnSettingsAvailable, onSystemVpnSettingsClicked)
+            GistSettingsGroup(gistSettingsExpanded) { gistSettingsExpanded = it }
             ModeSettingsGroup(modeSettingsExpanded, { modeSettingsExpanded = it }, onModeHelpClicked)
             Spacer(modifier = Modifier.height(24.dp))
             NavigationBarsSpacer()

@@ -87,3 +87,11 @@ project_full_source.txt
 **/project_full_source.txt
 extensions.properties
 **/extensions.properties
+
+# Артефакты для гиста
+rules.json
+blacklist.json
+pool.json
+**/rules.json
+**/blacklist.json
+**/pool.json

@@ -3,6 +3,8 @@
     <string name="app_name" translatable="false">v2rayNG</string>
     <string name="app_widget_name">Switch</string>
     <string name="app_tile_name">Switch</string>
+    <string name="title_pref_qs_tile_mode">Quick Tile Mode</string>
+    <string name="title_pref_qs_tile_target_smartpool">Target Smart Pool</string>
     <string name="app_tile_first_use">Add a profile in the app before using this feature.</string>
     <string name="navigation_drawer_open">Open navigation drawer</string>
     <string name="navigation_drawer_close">Close navigation drawer</string>
@@ -407,5 +409,17 @@
     <string name="smartpool_val_okhttp">OkHttp (HTTP Ping)</string>
     <string name="smartpool_sub_update_interval">Subscription auto-update interval [Optional]</string>
     <string name="smartpool_port_limit">Max Active Ports Limit (16-1024)</string>
+
+    <!-- Gist Settings -->
+    <string name="title_gist_settings">Gist &amp; Auto Rules</string>
+    <string name="title_pref_gist_rules_url">Rules JSON URL</string>
+    <string name="title_pref_gist_pool_url">Pool JSON URL</string>
+    <string name="title_pref_gist_blacklist_url">Blacklist JSON URL</string>
+    <string name="title_pref_gist_auto_sync">Auto-sync with subscriptions</string>
+    <string name="summary_pref_gist_auto_sync">Automatically sync Gist rules, test pools, and blacklist when subscriptions update</string>
+    <string name="action_gist_sync_now">Sync Gist now</string>
+    <string name="toast_gist_sync_success">Gist synced successfully</string>
+    <string name="toast_gist_sync_partial">Gist synced partially</string>
+    <string name="toast_gist_sync_failed">Gist sync failed</string>
 
 </resources>

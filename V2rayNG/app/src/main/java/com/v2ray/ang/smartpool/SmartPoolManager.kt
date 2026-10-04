@@ -2,7 +2,9 @@ package com.v2ray.ang.smartpool
 
 import android.content.Context
 import com.v2ray.ang.AppConfig
+import com.v2ray.ang.AppConfig.DEFAULT_SUBSCRIPTION_ID
 import com.v2ray.ang.dto.entities.ProfileItem
+import com.v2ray.ang.dto.entities.SubscriptionItem
 import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.util.JsonUtil
@@ -27,13 +29,56 @@ object SmartPoolManager {
         if (!MmkvManager.isInitialized) return
         val current = MmkvManager.decodeSubscription(SmartPoolConstants.SMART_POOL_GROUP_ID)
         if (current == null) {
-            val subItem = com.v2ray.ang.dto.entities.SubscriptionItem(
+            val subItem = SubscriptionItem(
                 remarks = SmartPoolConstants.SMART_POOL_REMARKS,
                 url = "",
                 autoUpdate = false
             )
             MmkvManager.encodeSubscription(SmartPoolConstants.SMART_POOL_GROUP_ID, subItem)
         }
+        reconcileSmartPoolProfiles()
+    }
+
+    fun reconcileSmartPoolProfiles() {
+        if (!MmkvManager.isInitialized) return
+        val allGuids = MmkvManager.decodeAllServerList().distinct()
+        val smartPoolGuids = mutableListOf<String>()
+        val seenRemarks = mutableMapOf<String, String>()
+
+        for (guid in allGuids) {
+            val config = MmkvManager.decodeServerConfig(guid) ?: continue
+            if (config.configType == EConfigType.SMART_POOL) {
+                val existingGuidForRemarks = seenRemarks[config.remarks]
+                if (existingGuidForRemarks != null && existingGuidForRemarks != guid) {
+                    MmkvManager.removeServer(guid)
+                    continue
+                }
+                seenRemarks[config.remarks] = guid
+                if (config.subscriptionId != SmartPoolConstants.SMART_POOL_GROUP_ID) {
+                    config.subscriptionId = SmartPoolConstants.SMART_POOL_GROUP_ID
+                    MmkvManager.encodeServerConfig(guid, config)
+                }
+                smartPoolGuids.add(guid)
+            }
+        }
+
+        val defaultList = MmkvManager.decodeServerList(DEFAULT_SUBSCRIPTION_ID)
+        if (defaultList.removeAll(smartPoolGuids.toSet())) {
+            MmkvManager.encodeServerList(defaultList, DEFAULT_SUBSCRIPTION_ID)
+        }
+
+        MmkvManager.decodeSubscriptions().forEach { sub ->
+            if (sub.guid != SmartPoolConstants.SMART_POOL_GROUP_ID) {
+                val subList = MmkvManager.decodeServerList(sub.guid)
+                if (subList.removeAll(smartPoolGuids.toSet())) {
+                    MmkvManager.encodeServerList(subList, sub.guid)
+                }
+            }
+        }
+
+        val currentPoolList = MmkvManager.decodeServerList(SmartPoolConstants.SMART_POOL_GROUP_ID)
+        val merged = (smartPoolGuids + currentPoolList).distinct().toMutableList()
+        MmkvManager.encodeServerList(merged, SmartPoolConstants.SMART_POOL_GROUP_ID)
     }
 
     fun getAllServerGuids(): List<String> {
@@ -123,7 +168,9 @@ object SmartPoolManager {
 
         val probeInterval = SmartPoolSubAutoUpdater.parseIntervalToMillis(profile.smartPoolInterval)
         val tolerance = profile.smartPoolTolerance ?: 30.0
-        prober = SmartPoolProber(bal, probeInterval, tolerance)
+        val probeUrls = com.v2ray.ang.smartpool.gist.GistPoolResolver.resolveTestUrls(profile.remarks)
+        val baselineUrl = com.v2ray.ang.smartpool.gist.GistPoolResolver.resolveBaselineUrl(profile.remarks)
+        prober = SmartPoolProber(bal, probeInterval, tolerance, probeUrls, baselineUrl)
 
         val subUpdateStr = profile.smartPoolSubUpdateInterval
         autoUpdater = SmartPoolSubAutoUpdater(targetSub, subUpdateStr)

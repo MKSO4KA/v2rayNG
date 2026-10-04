@@ -12,8 +12,12 @@ import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.core.LauncherManager
+import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.handler.AppLocaleManager
+import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.helper.MessageHelper
+import com.v2ray.ang.smartpool.SmartPoolConstants
+import com.v2ray.ang.smartpool.SmartPoolManager
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
 import java.lang.ref.SoftReference
@@ -24,10 +28,6 @@ class QSTileService : TileService() {
         super.attachBaseContext(newBase?.let(AppLocaleManager::localizedContext))
     }
 
-    /**
-     * Sets the state of the tile.
-     * @param state The state to set.
-     */
     fun setState(state: Int) {
         qsTile?.icon = Icon.createWithResource(applicationContext, R.drawable.ic_stat_name)
         if (state == Tile.STATE_INACTIVE) {
@@ -35,19 +35,18 @@ class QSTileService : TileService() {
             qsTile?.label = getString(R.string.app_name)
         } else if (state == Tile.STATE_ACTIVE) {
             qsTile?.state = Tile.STATE_ACTIVE
-            qsTile?.label = CoreServiceManager.getRunningServerName()
+            val smartLeader = SmartPoolManager.currentLeaderRemarks
+            qsTile?.label = if (!smartLeader.isNullOrBlank()) {
+                "⚡ $smartLeader"
+            } else {
+                CoreServiceManager.getRunningServerName()
+            }
         }
-
         qsTile?.updateTile()
     }
 
-    /**
-     * Refer to the official documentation for [registerReceiver](https://developer.android.com/reference/androidx/core/content/ContextCompat#registerReceiver(android.content.Context,android.content.BroadcastReceiver,android.content.IntentFilter,int):
-     * `registerReceiver(Context, BroadcastReceiver, IntentFilter, int)`.
-     */
     override fun onStartListening() {
         super.onStartListening()
-
         if (CoreServiceManager.isRunning()) {
             setState(Tile.STATE_ACTIVE)
         } else {
@@ -59,34 +58,69 @@ class QSTileService : TileService() {
         MessageHelper.sendMsg2Service(this, AppConfig.MSG_REGISTER_CLIENT, "")
     }
 
-    /**
-     * Called when the tile stops listening.
-     */
     override fun onStopListening() {
         super.onStopListening()
-
         try {
             applicationContext.unregisterReceiver(mMsgReceive)
             mMsgReceive = null
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to unregister receiver", e)
         }
-
     }
 
-    /**
-     * Called when the tile is clicked.
-     */
     override fun onClick() {
         super.onClick()
         when (qsTile.state) {
             Tile.STATE_INACTIVE -> {
-                LauncherManager.startServiceFromToggle(this)
+                resolveTargetAndStart()
             }
-
             Tile.STATE_ACTIVE -> {
                 LauncherManager.stopService(this)
             }
+        }
+    }
+
+    private fun resolveTargetAndStart() {
+        val mode = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_MODE, "0")
+        when (mode) {
+            "1" -> {
+                val targetGuid = MmkvManager.decodeSettingsString(AppConfig.PREF_QS_TILE_TARGET_GUID)
+                val chosenGuid = if (!targetGuid.isNullOrBlank() && MmkvManager.decodeServerConfig(targetGuid) != null) {
+                    targetGuid
+                } else {
+                    findSmartPoolGuid()
+                }
+                if (chosenGuid != null) {
+                    MmkvManager.setSelectServer(chosenGuid)
+                }
+            }
+            "2" -> {
+                val bestGuid = findBestPingGuid()
+                if (bestGuid != null) {
+                    MmkvManager.setSelectServer(bestGuid)
+                }
+            }
+        }
+        LauncherManager.startServiceFromToggle(this)
+    }
+
+    private fun findSmartPoolGuid(): String? {
+        val smartPoolList = MmkvManager.decodeServerList(SmartPoolConstants.SMART_POOL_GROUP_ID)
+        if (smartPoolList.isNotEmpty()) return smartPoolList.first()
+        val allGuids = MmkvManager.decodeAllServerList()
+        return allGuids.firstOrNull {
+            MmkvManager.decodeServerConfig(it)?.configType == EConfigType.SMART_POOL
+        }
+    }
+
+    private fun findBestPingGuid(): String? {
+        val allGuids = MmkvManager.decodeAllServerList()
+        return allGuids.filter {
+            val config = MmkvManager.decodeServerConfig(it)
+            config?.configType != EConfigType.SMART_POOL && config?.configType != EConfigType.CUSTOM
+        }.minByOrNull {
+            val delay = MmkvManager.decodeServerAffiliationInfo(it)?.testDelayMillis ?: 0L
+            if (delay > 0L) delay else Long.MAX_VALUE
         }
     }
 
@@ -97,25 +131,11 @@ class QSTileService : TileService() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
             val context = mReference.get()
             when (intent?.getIntExtra("key", 0)) {
-                AppConfig.MSG_STATE_RUNNING -> {
-                    context?.setState(Tile.STATE_ACTIVE)
-                }
-
-                AppConfig.MSG_STATE_NOT_RUNNING -> {
-                    context?.setState(Tile.STATE_INACTIVE)
-                }
-
-                AppConfig.MSG_STATE_START_SUCCESS -> {
-                    context?.setState(Tile.STATE_ACTIVE)
-                }
-
-                AppConfig.MSG_STATE_START_FAILURE -> {
-                    context?.setState(Tile.STATE_INACTIVE)
-                }
-
-                AppConfig.MSG_STATE_STOP_SUCCESS -> {
-                    context?.setState(Tile.STATE_INACTIVE)
-                }
+                AppConfig.MSG_STATE_RUNNING -> context?.setState(Tile.STATE_ACTIVE)
+                AppConfig.MSG_STATE_NOT_RUNNING -> context?.setState(Tile.STATE_INACTIVE)
+                AppConfig.MSG_STATE_START_SUCCESS -> context?.setState(Tile.STATE_ACTIVE)
+                AppConfig.MSG_STATE_START_FAILURE -> context?.setState(Tile.STATE_INACTIVE)
+                AppConfig.MSG_STATE_STOP_SUCCESS -> context?.setState(Tile.STATE_INACTIVE)
             }
         }
     }

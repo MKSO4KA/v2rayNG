@@ -110,6 +110,7 @@ class SmartPoolProber(
             }
             runCatching { probeDirectBaseline() }
             runCatching { probeActiveRing() }
+            runCatching { sweepColdCandidatesFairly() }
         }
     }
 

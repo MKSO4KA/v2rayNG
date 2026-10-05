@@ -21,7 +21,7 @@ class SmartPoolSubAutoUpdater(
 
     fun start() {
         if (running) return
-        val intervalMs = parseIntervalToMillis(intervalStr)
+        val intervalMs = parseIntervalToMillis(intervalStr, defaultMs = 3600000L)
         running = true
         LogUtil.i(
             SmartPoolConstants.TAG,
@@ -57,7 +57,7 @@ class SmartPoolSubAutoUpdater(
                 return
             }
 
-            val intervalMs = parseIntervalToMillis(intervalStr)
+            val intervalMs = parseIntervalToMillis(intervalStr, defaultMs = 3600000L)
             for (sub in targetSubs) {
                 LogUtil.i(SmartPoolConstants.TAG, "🔄 [AutoUpdater] Таймер сработал: запрос обновления подписки '${sub.subscription.remarks}'...")
                 val res = AngSubscriptionUpdater.updateConfigViaSub(sub, callerIntervalMs = intervalMs)

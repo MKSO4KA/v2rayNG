@@ -11,6 +11,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 class SmartPoolRecruiter(
     private val balancer: SmartPoolBalancer,
@@ -21,6 +22,7 @@ class SmartPoolRecruiter(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val isRecruiting = AtomicBoolean(false)
+    private val recruitOffset = AtomicInteger(0)
     private var running = false
 
     val warmStash = ConcurrentLinkedQueue<SmartNodeState>()
@@ -99,11 +101,19 @@ class SmartPoolRecruiter(
         if (!isRecruiting.compareAndSet(false, true)) return false
         var respondedCount = 0
         try {
-            val candidates = balancer.getColdCandidates()
+            val candidates = balancer.getColdCandidates().distinctBy { it.hash }
             if (candidates.isEmpty()) return false
 
-            val batchSize = SmartPoolConstants.STANDBY_CAPACITY.coerceAtMost(SmartPoolConstants.MAX_CONCURRENT_SOCKETS)
-            val batch = candidates.take(batchSize)
+            val total = candidates.size
+            val batchSize = if (isCritical) {
+                candidates.size.coerceAtMost(SmartPoolConstants.MAX_CONCURRENT_SOCKETS)
+            } else {
+                minOf(SmartPoolConstants.STANDBY_CAPACITY, total)
+            }
+            val offset = if (isCritical) 0 else Math.floorMod(recruitOffset.getAndAdd(batchSize), total)
+            val batch = (0 until batchSize).map { i ->
+                candidates[(offset + i) % total]
+            }
 
             coroutineScope {
                 for (node in batch) {

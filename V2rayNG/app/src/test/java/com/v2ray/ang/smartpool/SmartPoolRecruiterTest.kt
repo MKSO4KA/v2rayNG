@@ -112,4 +112,48 @@ class SmartPoolRecruiterTest {
         assertFalse(attemptToEvict, "Активный Лидер не может быть вытеснен через replaceOrUpgradeStandby")
         assertEquals(30002, balancer.getCurrentLeader()?.localPort)
     }
+
+    @Test
+    fun testRecruiterSweeps100PercentOfColdPoolFairlyAcrossCycles() = runBlocking {
+        val totalNodes = 47
+        val profiles = (1..totalNodes).map { createTestNode(it, "Cold-$it") }
+        val balancer = SmartPoolBalancer(profiles)
+
+        val leaderNode = balancer.listAll().first()
+        balancer.setEarlyLeader(leaderNode)
+
+        val coldCandidates = balancer.getColdCandidates()
+        val expectedColdCount = coldCandidates.size
+        assertTrue(expectedColdCount >= 40, "Cold candidates pool should have all remaining nodes")
+
+        val visitedPorts = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+        val recruiter = SmartPoolRecruiter(balancer, toleranceMs = 30.0) { port, _ ->
+            visitedPorts.add(port)
+            -1L
+        }
+
+        val neededCycles = Math.ceil(expectedColdCount.toDouble() / SmartPoolConstants.STANDBY_CAPACITY).toInt()
+        for (i in 0 until neededCycles) {
+            recruiter.runColdRecruitPass()
+        }
+
+        val coldPorts = coldCandidates.map { it.localPort }.toSet()
+        val missingPorts = coldPorts - visitedPorts
+        assertTrue(missingPorts.isEmpty(), "Recruiter must visit 100% of cold candidates. Missing: $missingPorts")
+
+        val updatedProfiles = profiles + (101..105).map { createTestNode(it, "NewCold-$it") }
+        balancer.differentialUpdate(updatedProfiles)
+
+        val newCandidates = balancer.getColdCandidates().filter { it.localPort in 30048..30055 }
+        val newTargetPorts = newCandidates.map { it.localPort }.toSet()
+
+        val totalColdAfterAdd = balancer.getColdCandidates().size
+        val passesNeeded = Math.ceil(totalColdAfterAdd.toDouble() / SmartPoolConstants.STANDBY_CAPACITY).toInt() + 1
+        for (i in 0 until passesNeeded) {
+            recruiter.runColdRecruitPass()
+        }
+
+        val missingNewPorts = newTargetPorts - visitedPorts
+        assertTrue(missingNewPorts.isEmpty(), "Recruiter must visit all dynamically added new nodes. Missing: $missingNewPorts")
+    }
 }

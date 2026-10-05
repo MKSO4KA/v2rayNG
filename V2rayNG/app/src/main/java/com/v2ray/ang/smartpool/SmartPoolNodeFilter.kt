@@ -6,15 +6,7 @@ import java.util.Locale
 
 object SmartPoolNodeFilter {
 
-    private val RESERVED_IP_CIDRS = listOf(
-        "0.0.0.0/8",       // RFC 1122 Current network / Unspecified
-        "127.0.0.0/8",     // RFC 1122 Loopback
-        "10.0.0.0/8",      // RFC 1918 Private
-        "172.16.0.0/12",   // RFC 1918 Private
-        "192.168.0.0/16",  // RFC 1918 Private
-        "169.254.0.0/16",  // RFC 3927 Link-local
-        "100.64.0.0/10"    // RFC 6598 CGNAT
-    )
+    private val RESERVED_IP_CIDRS = emptyList<String>()
 
     fun isReservedOrLocalAddress(host: String?): Boolean {
         if (host.isNullOrBlank()) return true
@@ -22,9 +14,7 @@ object SmartPoolNodeFilter {
         if (h == "0.0.0.0" || h == "localhost" || h == "::" || h == "::1" || h == "0") return true
         if (h.startsWith("127.") || h.startsWith("0.")) return true
         if (h.startsWith("fe80:") || h.startsWith("fc00:") || h.startsWith("fd")) return true
-        if (NetUtils.isIpv4Address(h)) {
-            return RESERVED_IP_CIDRS.any { NetUtils.isIpInCidr(h, it) }
-        }
+        // Do not block private IPv4 ranges (10/8, 172.16/12, 192.168/16)
         return false
     }
 

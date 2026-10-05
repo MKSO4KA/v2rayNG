@@ -5,8 +5,10 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import java.io.InputStreamReader
 
+@EnabledIfEnvironmentVariable(named = "RUN_LIVE_TESTS", matches = "true")
 class SmartSubOnlineIntegrationTest {
 
     private fun loadMimicryProfile(): MimicryProfile {

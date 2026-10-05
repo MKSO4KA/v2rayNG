@@ -40,29 +40,24 @@ object AngSubscriptionUpdater {
             return SubscriptionUpdateResult(failureCount = 1)
         }
         LogUtil.i(com.v2ray.ang.smartpool.SmartPoolConstants.TAG, "📥 [Подписка] Запрос обновления: '${it.subscription.remarks}' (URL: $url)")
-        val req = UrlContentRequest(
-            url = url,
-            userAgent = it.subscription.userAgent,
-            requestHeaders = it.subscription.requestHeaders,
-            timeout = 15000,
-            httpPort = SettingsManager.getHttpPort(),
-            proxyUsername = SettingsManager.getSocksUsername(),
-            proxyPassword = SettingsManager.getSocksPassword()
-        )
-        var configText = runCatching { HttpUtil.getUrlContentWithUserAgent(req) }.getOrDefault("")
+        var configText = runCatching {
+            com.v2ray.ang.smartpool.SmartSubFetcher.fetchRawContentWithCascade(
+                url,
+                profile = it.subscription.toMimicryProfile()
+            )
+        }.getOrDefault("")
+
         if (configText.isEmpty()) {
-            configText = runCatching { com.v2ray.ang.smartpool.SmartSubFetcher.fetchRawContentWithCascade(url, profile = it.subscription.toMimicryProfile()) }.getOrDefault("")
-        }
-        if (configText.isEmpty()) {
-            configText = runCatching {
-                HttpUtil.getUrlContentWithUserAgent(
-                    UrlContentRequest(
-                        url = url,
-                        userAgent = it.subscription.userAgent,
-                        requestHeaders = it.subscription.requestHeaders
-                    )
-                )
-            }.getOrDefault("")
+            val req = UrlContentRequest(
+                url = url,
+                userAgent = it.subscription.userAgent,
+                requestHeaders = it.subscription.requestHeaders,
+                timeout = 15000,
+                httpPort = SettingsManager.getHttpPort(),
+                proxyUsername = SettingsManager.getSocksUsername(),
+                proxyPassword = SettingsManager.getSocksPassword()
+            )
+            configText = runCatching { HttpUtil.getUrlContentWithUserAgent(req) }.getOrDefault("")
         }
         if (configText.isEmpty()) {
             LogUtil.w(com.v2ray.ang.smartpool.SmartPoolConstants.TAG, "❌ [Подписка] Не удалось получить контент для '${it.subscription.remarks}'")

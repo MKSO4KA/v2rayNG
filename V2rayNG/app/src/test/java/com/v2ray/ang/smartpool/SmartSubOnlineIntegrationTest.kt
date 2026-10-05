@@ -29,15 +29,15 @@ class SmartSubOnlineIntegrationTest {
             }
         }
         return MimicryProfile(
-            userAgent = "Happ/2.14.0/Windows/2605071230500",
-            model = "WIN-ISSKDS27EMN_x86_64",
-            hwid = "ac87c7e4-d900-4c3a-812d-83bce4c727c6",
-            os = "Windows",
-            osVer = "11_10.0.26200",
-            appVer = "2.14.0",
-            encoding = "gzip, deflate",
-            locale = "RU",
-            lang = "ru-RU,en,*"
+            userAgent = "v2raytun/android",
+            model = "POCO 24069PC21G",
+            hwid = "D663268B1803E487",
+            os = "Android",
+            osVer = "Android 16",
+            appVer = "5.25.82",
+            encoding = "gzip",
+            locale = "",
+            lang = ""
         )
     }
 

@@ -12,15 +12,15 @@ class SubscriptionMimicryTest {
     @Test
     fun testHappDefaultPresetValues() {
         val happ = MimicryProfile.HAPP_DEFAULT
-        assertEquals("Happ/4.6.0/Android/17903223988441985697", happ.userAgent)
-        assertEquals("RMX2063", happ.model)
-        assertEquals("a35bb23fdaadd515", happ.hwid)
+        assertEquals("v2raytun/android", happ.userAgent)
+        assertEquals("POCO 24069PC21G", happ.model)
+        assertEquals("D663268B1803E487", happ.hwid)
         assertEquals("Android", happ.os)
-        assertEquals("11", happ.osVer)
-        assertEquals("", happ.appVer)
+        assertEquals("Android 16", happ.osVer)
+        assertEquals("5.25.82", happ.appVer)
         assertEquals("gzip", happ.encoding)
-        assertEquals("ru", happ.locale)
-        assertEquals("ru-RU,ru;q=0.9", happ.lang)
+        assertEquals("", happ.locale)
+        assertEquals("", happ.lang)
     }
 
     @Test
@@ -31,15 +31,15 @@ class SubscriptionMimicryTest {
             .let { SmartSubFetcher.applyMimicryProfile(it, happ) }
             .build()
 
-        assertEquals("Happ/4.6.0/Android/17903223988441985697", req.header("User-Agent"))
-        assertEquals("RMX2063", req.header("X-Device-Model"))
-        assertEquals("a35bb23fdaadd515", req.header("X-HWID"))
+        assertEquals("v2raytun/android", req.header("User-Agent"))
+        assertEquals("POCO 24069PC21G", req.header("X-Device-Model"))
+        assertEquals("D663268B1803E487", req.header("X-HWID"))
         assertEquals("Android", req.header("X-Device-OS"))
-        assertEquals("11", req.header("X-Ver-OS"))
-        assertNull(req.header("X-App-Version"))
+        assertEquals("Android 16", req.header("X-Ver-OS"))
+        assertEquals("5.25.82", req.header("X-App-Version"))
         assertEquals("gzip", req.header("Accept-Encoding"))
-        assertEquals("ru", req.header("X-Device-Locale"))
-        assertEquals("ru-RU,ru;q=0.9", req.header("Accept-Language"))
+        assertNull(req.header("X-Device-Locale"))
+        assertNull(req.header("Accept-Language"))
     }
 
     @Test

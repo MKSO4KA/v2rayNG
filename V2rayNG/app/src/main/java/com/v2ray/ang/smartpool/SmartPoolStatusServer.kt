@@ -82,8 +82,11 @@ class SmartPoolStatusServer(
         val allNodes = balancer.listAll()
         val hotNodes = balancer.getHotNodes()
         val standbys = hotNodes.filter { it.localPort != leader?.localPort }
-        val stashList = recruiter?.warmStash?.toList() ?: emptyList()
-        val coldNodes = balancer.getColdCandidates()
+        val hotPorts = (listOfNotNull(leader) + standbys).map { it.localPort }.toSet()
+        val stashList = recruiter?.warmStash?.filter { it.localPort !in hotPorts } ?: emptyList()
+        val stashPorts = stashList.map { it.localPort }.toSet()
+        val coldNodes = balancer.getColdCandidates().filter { it.localPort !in hotPorts && it.localPort !in stashPorts }
+
 
         val javaHeap = try { ((Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / (1024 * 1024)).toInt() } catch (_: Throwable) { 0 }
         val nativeHeap = try { (Debug.getNativeHeapAllocatedSize() / (1024 * 1024)).toInt() } catch (_: Throwable) { 0 }

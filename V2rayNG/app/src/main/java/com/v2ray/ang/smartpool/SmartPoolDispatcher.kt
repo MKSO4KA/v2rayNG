@@ -4,9 +4,12 @@ import com.v2ray.ang.util.LogUtil
 import java.io.DataInputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.ConnectException
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -17,6 +20,7 @@ class SmartPoolDispatcher(
     private val isRunning = AtomicBoolean(false)
     private var serverSocket: ServerSocket? = null
     private val pool = Executors.newCachedThreadPool()
+    private val activeSockets = ConcurrentHashMap.newKeySet<Socket>()
 
     fun start() {
         if (isRunning.compareAndSet(false, true)) {
@@ -27,22 +31,30 @@ class SmartPoolDispatcher(
     fun stop() {
         if (isRunning.compareAndSet(true, false)) {
             runCatching { serverSocket?.close() }
+            activeSockets.forEach { runCatching { it.close() } }
+            activeSockets.clear()
             pool.shutdownNow()
         }
     }
 
     private fun listenLoop() {
         try {
-            serverSocket = ServerSocket(listenPort, 256, InetAddress.getByName("127.0.0.1"))
+            val ss = ServerSocket()
+            ss.reuseAddress = true
+            ss.bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), listenPort), 256)
+            serverSocket = ss
             LogUtil.i(SmartPoolConstants.TAG, "SmartPoolDispatcher listening on 127.0.0.1:$listenPort")
             while (isRunning.get()) {
                 val client = serverSocket?.accept() ?: break
+                activeSockets.add(client)
                 pool.execute { handleClient(client) }
             }
         } catch (e: Exception) {
             if (isRunning.get()) {
                 LogUtil.e(SmartPoolConstants.TAG, "Dispatcher server socket error", e)
             }
+        } finally {
+            runCatching { serverSocket?.close() }
         }
     }
 
@@ -145,11 +157,14 @@ class SmartPoolDispatcher(
             for (attempt in 0..1) {
                 val currentNode = targetNode ?: break
                 try {
-                    val s = Socket("127.0.0.1", currentNode.localPort)
+                    val s = Socket()
+                    s.reuseAddress = true
+                    s.connect(InetSocketAddress("127.0.0.1", currentNode.localPort), 8000)
                     s.soTimeout = 8000
                     s.tcpNoDelay = true
                     s.sendBufferSize = SmartPoolBufferPool.BUFFER_SIZE
                     s.receiveBufferSize = SmartPoolBufferPool.BUFFER_SIZE
+                    activeSockets.add(s)
                     val xin = DataInputStream(s.getInputStream())
                     val xout = s.getOutputStream()
 
@@ -221,6 +236,9 @@ class SmartPoolDispatcher(
                     xraySocket = s
                     connectSuccess = true
                     break
+                } catch (e: ConnectException) {
+                    LogUtil.d(SmartPoolConstants.TAG, "Xray port ${currentNode.localPort} warming up / connection refused, skipping penalty")
+                    targetNode = balancer.getActiveLeader()
                 } catch (e: Exception) {
                     balancer.penalize(currentNode)
                     targetNode = balancer.getActiveLeader()
@@ -270,6 +288,7 @@ class SmartPoolDispatcher(
         } catch (e: Exception) {
             targetNode?.let { balancer.penalize(it) }
         } finally {
+            activeSockets.remove(client)
             balancer.activeConnections.decrementAndGet()
             runCatching { client.close() }
         }

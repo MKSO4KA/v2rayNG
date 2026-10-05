@@ -108,6 +108,9 @@ class SmartPoolRecruiter(
             coroutineScope {
                 for (node in batch) {
                     launch {
+                        val hotPorts = balancer.getHotNodes().map { it.localPort }.toSet()
+                        if (node.localPort in hotPorts) return@launch
+
                         val rtt = probeFunc(node.localPort, cutoffMs)
                         if (rtt > 0) {
                             val worstStandby = balancer.getWorstStandbyRTT()
@@ -128,6 +131,9 @@ class SmartPoolRecruiter(
                             } else {
                                 val shouldAdd = (worstStandby <= 0 || rtt < maxAllowedRTT)
                                 if (shouldAdd && warmStash.size < SmartPoolConstants.WARM_POOL_CAPACITY) {
+                                        val currentHotPorts = balancer.getHotNodes().map { it.localPort }.toSet()
+                                        if (node.localPort in currentHotPorts) return@launch
+
                                     if (warmPortSet.add(node.localPort)) {
                                         warmStash.offer(node)
                                         LogUtil.i(SmartPoolConstants.TAG, "📦 [Recruiter] Добавлена в Тёплый пул: '${node.profile.remarks}' (${rtt}ms, всего в буфере: ${warmStash.size}/${SmartPoolConstants.WARM_POOL_CAPACITY})")

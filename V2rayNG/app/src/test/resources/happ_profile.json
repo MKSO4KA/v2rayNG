@@ -1,11 +1,11 @@
 {
-  "UserAgent": "Happ/2.14.0/Windows/2605071230500",
-  "Model": "WIN-ISSKDS27EMN_x86_64",
-  "HWID": "ac87c7e4-d900-4c3a-812d-83bce4c727c6",
-  "OS": "Windows",
-  "OSVer": "11_10.0.26200",
-  "AppVer": "2.14.0",
-  "Encoding": "gzip, deflate",
-  "Locale": "RU",
-  "Lang": "ru-RU,en,*"
+  "UserAgent": "v2raytun/android",
+  "Model": "POCO 24069PC21G",
+  "HWID": "D663268B1803E487",
+  "OS": "Android",
+  "OSVer": "Android 16",
+  "AppVer": "5.25.82",
+  "Encoding": "gzip",
+  "Locale": "",
+  "Lang": ""
 }

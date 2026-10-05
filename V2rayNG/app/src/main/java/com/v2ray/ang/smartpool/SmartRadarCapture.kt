@@ -21,15 +21,15 @@ data class MimicryProfile(
 ) {
     companion object {
         val HAPP_DEFAULT = MimicryProfile(
-            userAgent = "Happ/4.6.0/Android/17903223988441985697",
-            model = "RMX2063",
-            hwid = "a35bb23fdaadd515",
+            userAgent = "v2raytun/android",
+            model = "POCO 24069PC21G",
+            hwid = "D663268B1803E487",
             os = "Android",
-            osVer = "11",
-            appVer = "",
+            osVer = "Android 16",
+            appVer = "5.25.82",
             encoding = "gzip",
-            locale = "ru",
-            lang = "ru-RU,ru;q=0.9"
+            locale = "",
+            lang = ""
         )
     }
 }

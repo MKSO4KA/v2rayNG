@@ -117,7 +117,7 @@ class RealPingWorkerService(
         ) {
             val url = config.server.orEmpty()
             val port = config.serverPort.orEmpty().toInt()
-            val tcpTime = SpeedtestManager.socketConnectTime(url, port, 1000)
+            val tcpTime = SpeedtestManager.socketConnectTime(url, port, 2500)
             if (tcpTime <= -1L) {
                 return retFailure
             }
@@ -127,9 +127,26 @@ class RealPingWorkerService(
         if (!configResult.status) {
             return retFailure
         }
-        return RealPingExecutionLimiter.run(config.configType) {
-            CoreNativeManager.measureOutboundDelay(configResult.content, SettingsManager.getDelayTestUrl())
+        var delay = RealPingExecutionLimiter.run(config.configType) {
+            runCatching {
+                CoreNativeManager.measureOutboundDelay(configResult.content, SettingsManager.getDelayTestUrl())
+            }.getOrDefault(-1L)
         }
+        if (delay <= 0L) {
+            delay = RealPingExecutionLimiter.run(config.configType) {
+                runCatching {
+                    CoreNativeManager.measureOutboundDelay(configResult.content, SettingsManager.getDelayTestUrl(true))
+                }.getOrDefault(-1L)
+            }
+        }
+        if (delay <= 0L) {
+            delay = RealPingExecutionLimiter.run(config.configType) {
+                runCatching {
+                    CoreNativeManager.measureOutboundDelay(configResult.content, "https://1.1.1.1/cdn-cgi/trace")
+                }.getOrDefault(-1L)
+            }
+        }
+        return delay
     }
 
     private fun startTcping(guid: String): Long {
@@ -145,7 +162,7 @@ class RealPingWorkerService(
         ) {
             val url = config.server.orEmpty()
             val port = config.serverPort.orEmpty().toInt()
-            val tcpTime = SpeedtestManager.socketConnectTime(url, port, 1000)
+            val tcpTime = SpeedtestManager.socketConnectTime(url, port, 2500)
 
             return tcpTime
         }

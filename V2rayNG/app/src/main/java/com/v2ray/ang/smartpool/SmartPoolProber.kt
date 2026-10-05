@@ -92,13 +92,21 @@ class SmartPoolProber(
         val start = System.currentTimeMillis()
         try {
             val baselineTarget = customBaselineUrl?.takeIf { it.isNotBlank() } ?: SmartPoolConstants.BASELINE_TEST_URL
-            val conn = URL(baselineTarget).openConnection()
-            conn.connectTimeout = 3000
-            conn.readTimeout = 3000
-            conn.getInputStream().use { it.read(ByteArray(32)) }
-            val baseline = System.currentTimeMillis() - start
-            balancer.baselineLatencyMs = baseline
-            LogUtil.i(AppConfig.TAG, "SmartPool: direct network baseline = ${baseline}ms")
+            val conn = URL(baselineTarget).openConnection() as? java.net.HttpURLConnection
+            if (conn != null) {
+                conn.connectTimeout = 3000
+                conn.readTimeout = 3000
+                conn.instanceFollowRedirects = true
+                val code = conn.responseCode
+                conn.disconnect()
+                if (code in 200..399) {
+                    val baseline = System.currentTimeMillis() - start
+                    balancer.baselineLatencyMs = baseline
+                    LogUtil.i(AppConfig.TAG, "SmartPool: direct network baseline = ${baseline}ms")
+                    return
+                }
+            }
+            balancer.baselineLatencyMs = 0L
         } catch (_: Exception) {
             balancer.baselineLatencyMs = 0L
         }
@@ -176,11 +184,17 @@ class SmartPoolProber(
             val start = System.currentTimeMillis()
             val result = runCatching {
                 val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", localPort))
-                val conn = URL(probeUrl).openConnection(proxy)
+                val conn = URL(probeUrl).openConnection(proxy) as? java.net.HttpURLConnection ?: return@runCatching -1L
                 conn.connectTimeout = SmartPoolConstants.PROBE_TIMEOUT_MS.toInt()
                 conn.readTimeout = SmartPoolConstants.PROBE_TIMEOUT_MS.toInt()
-                conn.getInputStream().use { it.read(ByteArray(64)) }
-                System.currentTimeMillis() - start
+                conn.instanceFollowRedirects = true
+                val code = conn.responseCode
+                conn.disconnect()
+                if (code in 200..399) {
+                    System.currentTimeMillis() - start
+                } else {
+                    -1L
+                }
             }.getOrDefault(-1L)
             if (result > 0) return result
         }

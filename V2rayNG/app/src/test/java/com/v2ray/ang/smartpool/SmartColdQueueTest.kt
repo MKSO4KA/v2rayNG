@@ -60,14 +60,14 @@ class SmartColdQueueTest {
     @Test
     fun testPromotionToStandbyResetsPenaltyAndFailCount() {
         val balancer = SmartPoolBalancer(emptyList())
-        val node = SmartNodeState(createProfile(1), localPort = 30001, latencyMs = 85L, penalty = 10, failCount = 8)
+        val node = SmartNodeState(createProfile(1), localPort = 30001, latencyMs = 85L, failCount = 8)
+
 
         balancer.fillStandbys(listOf(node))
         val standbys = balancer.getHotNodes()
 
         assertTrue(standbys.any { it.localPort == 30001 })
         val promoted = standbys.first { it.localPort == 30001 }
-        assertEquals(0, promoted.penalty, "Штраф должен сбрасываться в 0 при повышении в Standby")
         assertEquals(0, promoted.failCount, "Счетчик сбоев должен сбрасываться в 0 при повышении")
     }
 

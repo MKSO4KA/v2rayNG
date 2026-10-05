@@ -34,19 +34,31 @@ object CoreDelayTester {
         scope.launch {
             var time = -1L
             var errorStr = ""
-            try {
-                time = coreController.measureDelay(SettingsManager.getDelayTestUrl())
-            } catch (e: Exception) {
-                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to measure delay", e)
-                errorStr = e.message?.substringAfter("\":").orEmpty()
-            }
-            if (time == -1L) {
-                ensureActive()
+            val isSmartPool = com.v2ray.ang.smartpool.SmartPoolManager.activeProfile != null || SettingsManager.getSocksPort() == com.v2ray.ang.smartpool.SmartPoolConstants.DISPATCHER_PORT
+            if (isSmartPool) {
+                time = measureViaSmartPoolDispatcher(SettingsManager.getDelayTestUrl())
+                if (time == -1L) {
+                    ensureActive()
+                    time = measureViaSmartPoolDispatcher(SettingsManager.getDelayTestUrl(true))
+                }
+                if (time == -1L) errorStr = "SmartPool dispatcher unreachable"
+            } else {
                 try {
-                    time = coreController.measureDelay(SettingsManager.getDelayTestUrl(true))
+                    time = coreController.measureDelay(SettingsManager.getDelayTestUrl())
                 } catch (e: Exception) {
-                    LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to measure delay", e)
-                    errorStr = e.message?.substringAfter("\":").orEmpty()
+                    LogUtil.w(AppConfig.TAG, "Native measureDelay failed, attempting fallback to local proxy", e)
+                    time = measureViaSmartPoolDispatcher(SettingsManager.getDelayTestUrl())
+                    if (time == -1L) errorStr = e.message?.substringAfter("\":").orEmpty()
+                }
+                if (time == -1L) {
+                    ensureActive()
+                    try {
+                        time = coreController.measureDelay(SettingsManager.getDelayTestUrl(true))
+                    } catch (e: Exception) {
+                        LogUtil.w(AppConfig.TAG, "Native measureDelay secondary failed, fallback to local proxy", e)
+                        time = measureViaSmartPoolDispatcher(SettingsManager.getDelayTestUrl(true))
+                        if (time == -1L) errorStr = e.message?.substringAfter("\":").orEmpty()
+                    }
                 }
             }
             ensureActive()
@@ -68,6 +80,22 @@ object CoreDelayTester {
             if (cause is CancellationException) {
                 MessageHelper.sendMsg2UI(service, AppConfig.MSG_MEASURE_DELAY_CANCEL, "", requestId)
             }
+        }
+    }
+
+    private fun measureViaSmartPoolDispatcher(urlStr: String): Long {
+        val start = System.currentTimeMillis()
+        val proxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", com.v2ray.ang.smartpool.SmartPoolConstants.DISPATCHER_PORT))
+        val conn = java.net.URL(urlStr).openConnection(proxy) as? java.net.HttpURLConnection ?: return -1L
+        conn.connectTimeout = 6000
+        conn.readTimeout = 6000
+        conn.instanceFollowRedirects = true
+        return try {
+            val code = conn.responseCode
+            conn.disconnect()
+            if (code in 200..399) (System.currentTimeMillis() - start) else -1L
+        } catch (_: Exception) {
+            -1L
         }
     }
 }

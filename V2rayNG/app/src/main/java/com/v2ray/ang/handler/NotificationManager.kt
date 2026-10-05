@@ -314,6 +314,11 @@ object NotificationManager {
      * @return The service instance.
      */
     private fun getService(): Service? {
-        return CoreServiceManager.serviceControl?.get()?.getService()
+        return try {
+            CoreServiceManager.serviceControl?.get()?.getService()
+        } catch (_: Throwable) {
+            null
+        }
     }
+
 }

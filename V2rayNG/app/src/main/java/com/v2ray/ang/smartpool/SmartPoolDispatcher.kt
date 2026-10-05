@@ -148,17 +148,38 @@ class SmartPoolDispatcher(
                     val s = Socket("127.0.0.1", currentNode.localPort)
                     s.soTimeout = 8000
                     s.tcpNoDelay = true
+                    s.sendBufferSize = SmartPoolBufferPool.BUFFER_SIZE
+                    s.receiveBufferSize = SmartPoolBufferPool.BUFFER_SIZE
                     val xin = DataInputStream(s.getInputStream())
                     val xout = s.getOutputStream()
 
-                    xout.write(byteArrayOf(0x05, 0x01, 0x00))
+                    val (authUser, authPass) = SmartPoolManager.getPoolAuthCredentials()
+                    xout.write(byteArrayOf(0x05, 0x01, 0x02))
                     xout.flush()
 
                     val gResp = ByteArray(2)
                     xin.readFully(gResp)
-                    if (gResp[0] != 0x05.toByte() || gResp[1] != 0x00.toByte()) {
+                    if (gResp[0] != 0x05.toByte() || gResp[1] != 0x02.toByte()) {
                         s.close()
-                        throw IllegalStateException("Xray rejected SOCKS5 auth")
+                        throw IllegalStateException("Xray rejected SOCKS5 auth method negotiation")
+                    }
+
+                    val userBytes = authUser.toByteArray(Charsets.UTF_8)
+                    val passBytes = authPass.toByteArray(Charsets.UTF_8)
+                    val authBuf = ByteArray(1 + 1 + userBytes.size + 1 + passBytes.size)
+                    authBuf[0] = 0x01
+                    authBuf[1] = userBytes.size.toByte()
+                    System.arraycopy(userBytes, 0, authBuf, 2, userBytes.size)
+                    authBuf[2 + userBytes.size] = passBytes.size.toByte()
+                    System.arraycopy(passBytes, 0, authBuf, 3 + userBytes.size, passBytes.size)
+                    xout.write(authBuf)
+                    xout.flush()
+
+                    val aResp = ByteArray(2)
+                    xin.readFully(aResp)
+                    if (aResp[0] != 0x01.toByte() || aResp[1] != 0x00.toByte()) {
+                        s.close()
+                        throw IllegalStateException("Xray internal SOCKS5 authentication failed")
                     }
 
                     xout.write(rawReq)
@@ -212,36 +233,38 @@ class SmartPoolDispatcher(
                 return
             }
 
-            client.soTimeout = 0
-            xraySocket.soTimeout = 0
+            client.soTimeout = 120000
+            xraySocket.soTimeout = 120000
 
             val cinStream = client.getInputStream()
             val coutStream = client.getOutputStream()
             val xinStream = xraySocket.getInputStream()
             val xoutStream = xraySocket.getOutputStream()
 
-            var hadIoError = false
-            val f1 = pool.submit {
+            var proxyFailed = false
+            val upstreamTask = pool.submit {
                 try {
                     pipe(cinStream, xoutStream)
                     runCatching { xraySocket.shutdownOutput() }
-                } catch (e: Exception) {
-                    hadIoError = true
-                }
-            }
-            val f2 = pool.submit {
-                try {
-                    pipe(xinStream, coutStream)
-                    runCatching { client.shutdownOutput() }
-                } catch (e: Exception) {
-                    hadIoError = true
+                } catch (_: Exception) {
+                    // Client closed tab/socket - normal TCP behavior, not a proxy failure
+                } finally {
+                    runCatching { xraySocket.close() }
                 }
             }
 
-            runCatching { f1.get() }
-            runCatching { f2.get() }
+            try {
+                pipe(xinStream, coutStream)
+                runCatching { client.shutdownOutput() }
+            } catch (e: Exception) {
+                proxyFailed = true
+            } finally {
+                runCatching { client.close() }
+            }
+
+            runCatching { upstreamTask.get() }
             runCatching { xraySocket.close() }
-            if (hadIoError && targetNode != null) {
+            if (proxyFailed && targetNode != null) {
                 balancer.penalize(targetNode)
             }
         } catch (e: Exception) {
@@ -253,13 +276,16 @@ class SmartPoolDispatcher(
     }
 
     private fun pipe(input: InputStream, output: OutputStream) {
-        val buffer = ByteArray(32768)
-        var read: Int
+        val buffer = SmartPoolBufferPool.acquire()
         try {
+            var read: Int
             while (input.read(buffer).also { read = it } != -1) {
                 output.write(buffer, 0, read)
                 output.flush()
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        } finally {
+            SmartPoolBufferPool.release(buffer)
+        }
     }
 }

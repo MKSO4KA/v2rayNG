@@ -26,7 +26,6 @@ class SmartFastStartTest {
 
         val leader = balancer.getCurrentLeader()
         assertEquals(30003, leader?.localPort, "Первая ответившая нода должна сразу стать Лидером")
-        assertEquals(0, leader?.penalty)
         assertEquals(0, leader?.failCount)
     }
 

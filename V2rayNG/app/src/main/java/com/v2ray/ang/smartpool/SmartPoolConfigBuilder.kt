@@ -20,7 +20,7 @@ object SmartPoolConfigBuilder {
     {
       "log": { "loglevel": "error" },
       "dns": {
-        "queryStrategy": "UseIP",
+        "queryStrategy": "UseIPv4",
         "servers": ["tcp+local://1.1.1.1:53", "8.8.8.8", "1.1.1.1", "localhost"]
       },
       "inbounds": [{
@@ -93,11 +93,14 @@ object SmartPoolConfigBuilder {
                 inBean.listen = AppConfig.LOOPBACK
                 inBean.port = port
                 inBean.protocol = "socks"
+                val (authUser, authPass) = SmartPoolManager.getPoolAuthCredentials()
+                val socksAcc = listOf(InboundBean.InSettingsBean.SocksAccountBean(user = authUser, pass = authPass))
                 if (inBean.settings == null) {
-                    inBean.settings = JsonUtil.fromJson("{\"auth\":\"noauth\",\"udp\":true}", InboundBean.InSettingsBean::class.java)
+                    inBean.settings = InboundBean.InSettingsBean(auth = "password", udp = true, accounts = socksAcc)
                 } else {
-                    inBean.settings?.auth = "noauth"
+                    inBean.settings?.auth = "password"
                     inBean.settings?.udp = true
+                    inBean.settings?.accounts = socksAcc
                 }
                 if (inBean.sniffing == null) {
                     inBean.sniffing = JsonUtil.fromJson("{\"enabled\":true,\"destOverride\":[\"http\",\"tls\",\"quic\"]}", InboundBean.SniffingBean::class.java)
@@ -120,7 +123,7 @@ object SmartPoolConfigBuilder {
         v2rayConfig.outbounds.add(OutboundBean(protocol = "freedom", tag = "direct", settings = OutboundBean.OutSettingsBean(), streamSettings = StreamSettingsBean()))
         v2rayConfig.outbounds.add(OutboundBean(protocol = "blackhole", tag = "block", settings = OutboundBean.OutSettingsBean(), streamSettings = StreamSettingsBean()))
         v2rayConfig.routing.rules.add(RulesBean(outboundTag = AppConfig.TAG_DIRECT, ip = ArrayList(AppConfig.PRIVATE_IP_LIST)))
-        CoreConfigDomainResolver.resolveOutboundDomainsToHosts(v2rayConfig)
+        // Domain resolution deferred asynchronously to Xray core via queryStrategy UseIPv4
         return v2rayConfig
     }
 }

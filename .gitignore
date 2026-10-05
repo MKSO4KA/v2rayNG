@@ -100,3 +100,7 @@ pool.json
 *sub_dump*
 sub_*_dump.*
 SmartSubscriptionLiveDiagnosticsTest.kt
+
+# Developer tools and local monitors
+tools/
+tools/*

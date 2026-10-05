@@ -9,7 +9,6 @@ data class SmartNodeState(
     var profile: ProfileItem,
     var localPort: Int,
     var latencyMs: Long = -1,
-    var penalty: Int = 0,
     var failCount: Int = 0,
     var cooldownUntil: Long = 0,
     var isBanned: Boolean = false,
@@ -29,14 +28,14 @@ data class SmartNodeState(
 
     fun effectiveRTT(baselineMs: Long = 0L): Long {
         if (latencyMs <= 0) return Long.MAX_VALUE
-        val relative = (latencyMs - baselineMs).coerceAtLeast(0L)
-        return relative + (penalty * 15L)
+        return latencyMs
     }
 
     fun healthScore(): Double {
         val latScore = if (latencyMs > 0) 1000.0 / (latencyMs + 5.0) else 0.0
-        return latScore - (failCount * 12.0) - (penalty * 3.0)
+        return latScore - (failCount * 12.0)
     }
+
 }
 
 class SmartPoolBalancer(
@@ -55,6 +54,7 @@ class SmartPoolBalancer(
             field = value
             activeLeader?.let { value?.invoke(it) }
         }
+    var onDeficitDetected: ((Boolean) -> Unit)? = null
 
     init {
         val history = SmartPoolStorage.loadHistory()
@@ -69,7 +69,6 @@ class SmartPoolBalancer(
                 firstSeenTime = hist?.firstSeenTime ?: System.currentTimeMillis(),
                 lastSuccessTime = hist?.lastSuccessTime ?: System.currentTimeMillis(),
                 latencyMs = hist?.lastLatencyMs ?: -1L,
-                penalty = hist?.penalty ?: 0,
                 failCount = hist?.failCount ?: 0
             )
             nodes.add(state)
@@ -84,7 +83,6 @@ class SmartPoolBalancer(
     fun getCurrentLeader(): SmartNodeState? = synchronized(lock) { activeLeader }
 
     fun setEarlyLeader(node: SmartNodeState) = synchronized(lock) {
-        node.penalty = 0
         node.failCount = 0
         val old = activeLeader
         activeLeader = node
@@ -101,7 +99,6 @@ class SmartPoolBalancer(
         if (node.localPort == activeLeader?.localPort) return@synchronized
         if (standbys.any { it.localPort == node.localPort }) return@synchronized
         if (standbys.size < SmartPoolConstants.STANDBY_CAPACITY) {
-            node.penalty = 0
             node.failCount = 0
             standbys.add(node)
         }
@@ -113,7 +110,6 @@ class SmartPoolBalancer(
             if (activeLeader != null && activeLeader!!.isAvailable()) return@synchronized activeLeader
             val standby = standbys.firstOrNull { it.isAvailable() }
             if (standby != null) {
-                standby.penalty = 0
                 standby.failCount = 0
                 activeLeader = standby
                 standbys.remove(standby)
@@ -132,16 +128,20 @@ class SmartPoolBalancer(
     }
 
     fun penalize(node: SmartNodeState) {
-        synchronized(lock) {
-            node.penalty += 2
+        val (isCritical, rotateNeeded) = synchronized(lock) {
             node.failCount++
-            SmartPoolStorage.recordFailure(node.hash)
             if (node.failCount >= 3) {
                 node.cooldownUntil = System.currentTimeMillis() + (SmartPoolConstants.COOLDOWN_MINUTES * 60 * 1000L)
             }
+            val crit = standbys.count { it.isAvailable() } < (SmartPoolConstants.STANDBY_CAPACITY / 2)
+            val needRotate = (activeLeader?.localPort == node.localPort)
+            Pair(crit, needRotate)
         }
-        if (activeLeader?.localPort == node.localPort) rotateLeader()
+        SmartPoolStorage.recordFailure(node.hash)
+        if (rotateNeeded) rotateLeader()
+        onDeficitDetected?.invoke(isCritical)
     }
+
 
     fun rotateLeader() {
         var newLeader: SmartNodeState? = null
@@ -166,26 +166,35 @@ class SmartPoolBalancer(
         newLeader?.let { onLeaderChanged?.invoke(it) }
     }
 
-    fun updateStandbys(verified: List<SmartNodeState>, toleranceMs: Double = 0.0) {
+    fun rebalanceTopTier(candidates: List<SmartNodeState>, toleranceMs: Double = 0.0) = synchronized(lock) {
+        val validAlive = candidates.filter { it.isAvailable() && it.latencyMs > 0 }
+            .distinctBy { it.localPort }
+            .sortedBy { it.latencyMs }
+        if (validAlive.isEmpty()) return@synchronized
+
+        val best = validAlive[0]
+        val current = activeLeader
         var newLeader: SmartNodeState? = null
-        synchronized(lock) {
-            if (verified.isEmpty()) return
-            val sorted = verified.sortedBy { it.effectiveRTT(baselineLatencyMs) }
-            val best = sorted[0]
-            val current = activeLeader
-            val shouldSwitch = if (current != null && current.isAvailable() && current.profile.remarks != best.profile.remarks) {
-                best.effectiveRTT(baselineLatencyMs) < (current.effectiveRTT(baselineLatencyMs) - toleranceMs.toLong())
-            } else {
-                best.profile.remarks != current?.profile?.remarks
-            }
-            if (shouldSwitch) {
-                newLeader = best
-                activeLeader = best
-            }
-            standbys = sorted.filter { it.localPort != activeLeader?.localPort }.take(SmartPoolConstants.STANDBY_CAPACITY).toMutableList()
+
+        if (current == null || !current.isAvailable() || current.latencyMs <= 0) {
+            activeLeader = best
+            newLeader = best
+        } else if (best.localPort != current.localPort && best.latencyMs < (current.latencyMs - toleranceMs.toLong())) {
+            activeLeader = best
+            newLeader = best
         }
+
+        standbys = validAlive.filter { it.localPort != activeLeader?.localPort }
+            .take(SmartPoolConstants.STANDBY_CAPACITY)
+            .toMutableList()
+
         newLeader?.let { onLeaderChanged?.invoke(it) }
     }
+
+    fun updateStandbys(verified: List<SmartNodeState>, toleranceMs: Double = 0.0) {
+        rebalanceTopTier(verified, toleranceMs)
+    }
+
 
     fun differentialUpdate(newCandidates: List<ProfileItem>): Boolean = synchronized(lock) {
         val unique = SmartPoolNodeFilter.filterAndDeduplicate(newCandidates)
@@ -217,6 +226,8 @@ class SmartPoolBalancer(
             val existing = existingByHash.remove(h)
             if (existing != null) {
                 existing.profile = profile
+                existing.failCount = 0
+                existing.cooldownUntil = 0
                 updatedNodes.add(existing)
                 matchedCount++
             } else {
@@ -265,7 +276,6 @@ class SmartPoolBalancer(
             survivingLeader != null && survivingLeader.isAvailable() -> survivingLeader
             standbys.isNotEmpty() && standbys.first().isAvailable() -> {
                 val candidate = standbys.removeAt(0)
-                candidate.penalty = 0
                 candidate.failCount = 0
                 candidate
             }
@@ -292,14 +302,87 @@ class SmartPoolBalancer(
         val hotPorts = (listOfNotNull(activeLeader) + standbys).map { it.localPort }.toSet()
         nodes.filter { it.localPort !in hotPorts && it.isAvailable() }
     }
+    fun getWorstStandbyRTT(): Long = synchronized(lock) {
+        standbys.filter { it.isAvailable() && it.latencyMs > 0 }.maxOfOrNull { it.effectiveRTT(baselineLatencyMs) } ?: -1L
+    }
+
+    fun upgradeLeaderIfBetter(candidate: SmartNodeState, toleranceMs: Double = 0.0): Boolean {
+        if (!candidate.isAvailable() || candidate.latencyMs <= 0) return false
+        var changedLeader: SmartNodeState? = null
+        val upgraded = synchronized(lock) {
+            val current = activeLeader
+            if (current == null) {
+                candidate.failCount = 0
+                activeLeader = candidate
+                standbys.removeIf { it.localPort == candidate.localPort }
+                changedLeader = candidate
+                return@synchronized true
+            }
+            if (candidate.localPort == current.localPort) return@synchronized false
+            val currentEff = current.effectiveRTT(baselineLatencyMs)
+            val candidateEff = candidate.effectiveRTT(baselineLatencyMs)
+            if (candidateEff < currentEff - toleranceMs.toLong()) {
+                candidate.failCount = 0
+                val old = current
+                activeLeader = candidate
+                standbys.removeIf { it.localPort == candidate.localPort }
+                if (old.isAvailable() && old.latencyMs > 0 && standbys.none { it.localPort == old.localPort }) {
+                    if (standbys.size < SmartPoolConstants.STANDBY_CAPACITY) {
+                        standbys.add(old)
+                    } else {
+                        val worst = standbys.maxByOrNull { it.effectiveRTT(baselineLatencyMs) }
+                        if (worst != null && old.effectiveRTT(baselineLatencyMs) < worst.effectiveRTT(baselineLatencyMs)) {
+                            val idx = standbys.indexOf(worst)
+                            if (idx != -1) standbys[idx] = old
+                        }
+                    }
+                }
+                changedLeader = candidate
+                true
+            } else {
+                false
+            }
+        }
+        changedLeader?.let { onLeaderChanged?.invoke(it) }
+        return upgraded
+    }
+
+    fun replaceOrUpgradeStandby(candidate: SmartNodeState, toleranceMs: Double = 0.0): Boolean = synchronized(lock) {
+        if (!candidate.isAvailable() || candidate.latencyMs <= 0) return false
+        if (candidate.localPort == activeLeader?.localPort) return false
+        if (standbys.any { it.localPort == candidate.localPort }) return false
+
+        candidate.failCount = 0
+
+        if (standbys.size < SmartPoolConstants.STANDBY_CAPACITY) {
+            standbys.add(candidate)
+            return true
+        }
+
+        val deadIdx = standbys.indexOfFirst { !it.isAvailable() }
+        if (deadIdx != -1) {
+            standbys[deadIdx] = candidate
+            return true
+        }
+
+        val candEff = candidate.effectiveRTT(baselineLatencyMs)
+        val worst = standbys.maxByOrNull { it.effectiveRTT(baselineLatencyMs) } ?: return false
+        if (candEff < (worst.effectiveRTT(baselineLatencyMs) - toleranceMs.toLong())) {
+            val worstIdx = standbys.indexOf(worst)
+            if (worstIdx != -1) {
+                standbys[worstIdx] = candidate
+                return true
+            }
+        }
+        false
+    }
+
     fun fillStandbys(recruited: List<SmartNodeState>) = synchronized(lock) {
         standbys.removeAll { !it.isAvailable() }
         val existingPorts = (listOfNotNull(activeLeader) + standbys).map { it.localPort }.toSet()
         for (cand in recruited) {
             if (standbys.size >= SmartPoolConstants.STANDBY_CAPACITY) break
-            // Только проверенные рабочие ноды с подтвержденным latency > 0 допускаются в Standby
             if (cand.localPort !in existingPorts && cand.isAvailable() && cand.latencyMs > 0) {
-                cand.penalty = 0
                 cand.failCount = 0
                 standbys.add(cand)
             }

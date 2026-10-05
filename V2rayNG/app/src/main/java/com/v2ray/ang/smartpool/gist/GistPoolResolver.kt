@@ -9,18 +9,23 @@ object GistPoolResolver {
     private const val PREF_GIST_POOLS = "pref_gist_pools_cache"
 
     fun savePools(pools: List<GistPoolItem>) {
-        if (!MmkvManager.isInitialized) return
-        MmkvManager.encodeSettings(PREF_GIST_POOLS, JsonUtil.toJson(pools))
+        try {
+            if (!MmkvManager.isInitialized) return
+            MmkvManager.encodeSettings(PREF_GIST_POOLS, JsonUtil.toJson(pools))
+        } catch (_: Throwable) {}
     }
 
     fun getPools(): List<GistPoolItem> {
-        if (!MmkvManager.isInitialized) return emptyList()
-        val json = MmkvManager.decodeSettingsString(PREF_GIST_POOLS)
-        if (json.isNullOrBlank()) return emptyList()
-        return runCatching {
+        return try {
+            if (!MmkvManager.isInitialized) return emptyList()
+            val json = MmkvManager.decodeSettingsString(PREF_GIST_POOLS)
+            if (json.isNullOrBlank()) return emptyList()
             JsonUtil.fromJson(json, Array<GistPoolItem>::class.java)?.toList() ?: emptyList()
-        }.getOrDefault(emptyList())
+        } catch (_: Throwable) {
+            emptyList()
+        }
     }
+
 
     fun findPoolForRemarks(remarks: String?): GistPoolItem? {
         if (remarks.isNullOrBlank()) return null

@@ -27,9 +27,9 @@ class SmartPoolBalancerTest {
         assertEquals(30001, leader!!.localPort)
 
         balancer.penalize(leader)
-        assertEquals(2, leader.penalty)
         assertEquals(1, leader.failCount)
     }
+
 
     @Test
     fun testLeaderListenerInvokedImmediately() {

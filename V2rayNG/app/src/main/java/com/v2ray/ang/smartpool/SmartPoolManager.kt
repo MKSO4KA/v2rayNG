@@ -10,20 +10,30 @@ import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.LogUtil
 import kotlinx.coroutines.flow.MutableStateFlow
+import com.v2ray.ang.smartpool.SmartPoolStatusServer
+import java.util.UUID
 
 object SmartPoolManager {
     private var dispatcher: SmartPoolDispatcher? = null
     private var balancer: SmartPoolBalancer? = null
-    private var prober: SmartPoolProber? = null
+    var prober: SmartPoolProber? = null
+
     private var autoUpdater: SmartPoolSubAutoUpdater? = null
+    var recruiter: SmartPoolRecruiter? = null
     private var radar: SmartRadarCapture? = null
     var activeProfile: ProfileItem? = null
     @Volatile var currentLeaderRemarks: String? = null
+    private val poolSessionToken: String = UUID.randomUUID().toString()
+    private var statusServer: SmartPoolStatusServer? = null
 
     val radarCountState = MutableStateFlow(0)
     val radarRunningState = MutableStateFlow(false)
 
     fun isSmartPoolConfig(profile: ProfileItem?): Boolean = profile?.configType == EConfigType.SMART_POOL
+
+    fun getPoolAuthCredentials(): Pair<String, String> {
+        return Pair(SmartPoolConstants.INTERNAL_POOL_USER, poolSessionToken)
+    }
 
     fun ensureSmartPoolGroup() {
         if (!MmkvManager.isInitialized) return
@@ -109,11 +119,15 @@ object SmartPoolManager {
         val candidates = getValidPoolCandidates()
         if (candidates.isNotEmpty()) {
             bal.differentialUpdate(candidates)
+            recruiter?.clearWarmStash()
+            recruiter?.triggerRecruitment(isCritical = true)
             prober?.calibrateOnce()
             bal.getCurrentLeader()?.let { leader ->
                 LogUtil.i(AppConfig.TAG, "SmartPool: proxies updated, leader is '${leader.profile.remarks}' (127.0.0.1:${leader.localPort})")
                 currentLeaderRemarks = leader.profile.remarks
-                com.v2ray.ang.handler.NotificationManager.updateTitle("${SmartPoolConstants.SMART_POOL_REMARKS} → ${leader.profile.remarks}")
+                try {
+                    com.v2ray.ang.handler.NotificationManager.updateTitle("${SmartPoolConstants.SMART_POOL_REMARKS} → ${leader.profile.remarks}")
+                } catch (_: Throwable) {}
             }
         }
     }
@@ -128,6 +142,9 @@ object SmartPoolManager {
         val leader = getCurrentLeader()
         return if (leader != null && leader.profile.remarks.isNotBlank()) {
             currentLeaderRemarks = leader.profile.remarks
+            try {
+                com.v2ray.ang.handler.NotificationManager.updateTitle("${SmartPoolConstants.SMART_POOL_REMARKS} → ${leader.profile.remarks}")
+            } catch (_: Throwable) {}
             "${SmartPoolConstants.SMART_POOL_REMARKS} → ${leader.profile.remarks}"
         } else {
             defaultTitle
@@ -143,42 +160,84 @@ object SmartPoolManager {
 
     fun onCoreStarting(context: Context, profile: ProfileItem) {
         if (!isSmartPoolConfig(profile)) return
-        stop()
-        activeProfile = profile
-        val portLimit = profile.smartPoolPortLimit ?: SmartPoolConstants.DEFAULT_PORT_LIMIT
         val targetSub = profile.smartPoolTargetSubId ?: profile.subscriptionId
-        val candidates = getValidPoolCandidates(profile.smartPoolFilterRegex, targetSub).take(portLimit)
-        LogUtil.i(AppConfig.TAG, "SmartPool: onCoreStarting for '${profile.remarks}', pool size: ${candidates.size}, portLimit: $portLimit")
-        val bal = SmartPoolBalancer(candidates, portLimit)
-        bal.onLeaderChanged = { leader ->
-            LogUtil.i(AppConfig.TAG, "SmartPool: active leader -> '${leader.profile.remarks}' (127.0.0.1:${leader.localPort})")
-            currentLeaderRemarks = leader.profile.remarks
-            com.v2ray.ang.handler.NotificationManager.updateTitle("${SmartPoolConstants.SMART_POOL_REMARKS} → ${leader.profile.remarks}")
-        }
-        balancer = bal
-        val disp = SmartPoolDispatcher(bal)
-        dispatcher = disp
-        disp.start()
-        LogUtil.i(AppConfig.TAG, "SmartPool: dispatcher listening on 127.0.0.1:${SmartPoolConstants.DISPATCHER_PORT}")
-
-        bal.getCurrentLeader()?.let { leader ->
-            currentLeaderRemarks = leader.profile.remarks
-            com.v2ray.ang.handler.NotificationManager.updateTitle("${SmartPoolConstants.SMART_POOL_REMARKS} → ${leader.profile.remarks}")
-        }
-
-        val probeInterval = SmartPoolSubAutoUpdater.parseIntervalToMillis(profile.smartPoolInterval)
-        val tolerance = profile.smartPoolTolerance ?: 30.0
-        val probeUrls = com.v2ray.ang.smartpool.gist.GistPoolResolver.resolveTestUrls(profile.remarks)
-        val baselineUrl = com.v2ray.ang.smartpool.gist.GistPoolResolver.resolveBaselineUrl(profile.remarks)
-        prober = SmartPoolProber(bal, probeInterval, tolerance, probeUrls, baselineUrl)
+        val candidates = getValidPoolCandidates(profile.smartPoolFilterRegex, targetSub)
+        startSession(candidates, profile, enableDispatcher = true)
 
         val subUpdateStr = profile.smartPoolSubUpdateInterval
         autoUpdater = SmartPoolSubAutoUpdater(targetSub, subUpdateStr)
     }
 
     fun onCoreStarted() {
+        recruiter?.start()
         prober?.start()
         autoUpdater?.start()
+        statusServer?.start()
+    }
+
+    /**
+     * Unified session starter used by both the Android service flow and unit tests.
+     */
+    fun startSession(
+        candidates: List<ProfileItem>,
+        profile: ProfileItem,
+        probeFunc: ((localPort: Int, timeoutMs: Long) -> Long)? = null,
+        enableDispatcher: Boolean = true
+    ): SmartPoolBalancer {
+        // Ensure a clean state before starting a new session
+        stop()
+        activeProfile = profile
+        val portLimit = profile.smartPoolPortLimit ?: SmartPoolConstants.DEFAULT_PORT_LIMIT
+        val limitedCandidates = candidates.take(portLimit)
+        LogUtil.i(AppConfig.TAG, "SmartPool: starting session for '${profile.remarks}', pool size: ${limitedCandidates.size}, portLimit: $portLimit")
+
+        val bal = SmartPoolBalancer(limitedCandidates, portLimit)
+        bal.onLeaderChanged = { leader ->
+            LogUtil.i(AppConfig.TAG, "SmartPool: active leader → '${leader.profile.remarks}' (127.0.0.1:${leader.localPort})")
+            currentLeaderRemarks = leader.profile.remarks
+            try {
+                com.v2ray.ang.handler.NotificationManager.updateTitle("${SmartPoolConstants.SMART_POOL_REMARKS} → ${leader.profile.remarks}")
+            } catch (_: Throwable) {}
+        }
+        balancer = bal
+
+        if (enableDispatcher) {
+            val disp = SmartPoolDispatcher(bal)
+            dispatcher = disp
+            disp.start()
+            LogUtil.i(AppConfig.TAG, "SmartPool: dispatcher listening on 127.0.0.1:${SmartPoolConstants.DISPATCHER_PORT}")
+        }
+
+        bal.getCurrentLeader()?.let { leader ->
+            currentLeaderRemarks = leader.profile.remarks
+            try {
+                com.v2ray.ang.handler.NotificationManager.updateTitle("${SmartPoolConstants.SMART_POOL_REMARKS} → ${leader.profile.remarks}")
+            } catch (_: Throwable) {}
+        }
+
+        val probeInterval = SmartPoolSubAutoUpdater.parseIntervalToMillis(profile.smartPoolInterval)
+        val tolerance = profile.smartPoolTolerance ?: 30.0
+        val probeUrls = com.v2ray.ang.smartpool.gist.GistPoolResolver.resolveTestUrls(profile.remarks)
+        val baselineUrl = com.v2ray.ang.smartpool.gist.GistPoolResolver.resolveBaselineUrl(profile.remarks)
+
+        val prb = SmartPoolProber(bal, probeInterval, tolerance, probeUrls, baselineUrl, probeFunc, recruiterProvider = { recruiter })
+        prober = prb
+
+        val rec = SmartPoolRecruiter(balancer = bal, toleranceMs = tolerance, probeIntervalMs = probeInterval, probeFunc = probeFunc ?: prb::probeLocalSocks)
+
+
+        rec.onWarmPoolFilled = { prb.triggerEarlyProbe() }
+        bal.onDeficitDetected = { isCrit -> rec.notifyDeficit(isCrit) }
+        recruiter = rec
+
+        val sServer = SmartPoolStatusServer(bal, rec)
+        statusServer = sServer
+
+        statusServer?.start()
+        recruiter?.start()
+        prober?.start()
+
+        return bal
     }
 
     fun stop() {
@@ -186,11 +245,15 @@ object SmartPoolManager {
         currentLeaderRemarks = null
         autoUpdater?.stop()
         autoUpdater = null
+        recruiter?.stop()
+        recruiter = null
         dispatcher?.stop()
         dispatcher = null
         prober?.stop()
         prober = null
         balancer = null
+        statusServer?.stop()
+        statusServer = null
         LogUtil.i(AppConfig.TAG, "SmartPool: manager stopped")
     }
 

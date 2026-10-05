@@ -236,18 +236,28 @@ deploy:
 	fi
 	@echo "DONE! Artifacts deployed to $(APP_LIBS_DIR)"
 
+TEST_FLAVOR ?= Fdroid
+
 test:
-	@echo "=== Running Android Unit Tests ==="
-	@cd "$(PROJECT_ROOT)/V2rayNG" && chmod +x gradlew && ./gradlew test
+	@echo "=== Running Android Unit Tests ($(TEST_FLAVOR)) ==="
+	@cd "$(PROJECT_ROOT)/V2rayNG" && chmod +x gradlew && ./gradlew test$(TEST_FLAVOR)DebugUnitTest
 
 .PHONY: log
 log:
-	@echo "=== Streaming SmartPool / v2rayNG Logs via ADB ==="
+	@echo "=== Streaming Fresh SmartPool / v2rayNG Logs via ADB ==="
 	@ADB_BIN="$(ANDROID_HOME)/platform-tools/adb.exe"; \
 	if [ ! -f "$$ADB_BIN" ]; then ADB_BIN="adb"; fi; \
 	ADB_TARGET=""; \
 	if [ -n "$(DEVICE)" ]; then ADB_TARGET="-s $(DEVICE)"; fi; \
-	"$$ADB_BIN" $$ADB_TARGET logcat -v time | grep --line-buffered -E "SmartPool|Лидер|Балансировщик|Ротация|Штраф|Кулдаун|Рекрутинг|GoLog|com.v2ray.ang"
+	"$$ADB_BIN" $$ADB_TARGET logcat -c; \
+	"$$ADB_BIN" $$ADB_TARGET logcat -v time | grep --line-buffered -E "SmartPool|Лидер|Балансировщик|Ротация|Штраф|Кулдаун|Рекрутинг|GoLog|Probe|com.v2ray.ang"
+
+.PHONY: monitor
+monitor:
+	@echo "=== Starting SmartPool TUI Resource Monitor (Go) ==="
+	@ADB_BIN="$(ANDROID_HOME)/platform-tools/adb.exe"; \
+	if [ ! -f "$$ADB_BIN" ]; then ADB_BIN="adb"; fi; \
+	ADB_BIN="$$ADB_BIN" go run "$(PROJECT_ROOT)/tools/smart-monitor/main.go" "$(DEVICE)"
 
 clean:
 	@echo "Cleaning build artifacts..."

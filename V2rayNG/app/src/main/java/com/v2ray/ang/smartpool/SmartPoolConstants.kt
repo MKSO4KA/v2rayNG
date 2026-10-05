@@ -5,9 +5,10 @@ object SmartPoolConstants {
     const val DISPATCHER_PORT = 10808
     const val BASE_POOL_PORT = 30001
     const val RADAR_PORT = 29999
+    const val STATUS_PORT = 29998
     const val PROBE_TIMEOUT_MS = 5000L
     const val STANDBY_CAPACITY = 8
-    const val COOLDOWN_MINUTES = 15L
+    const val COOLDOWN_MINUTES = 2L
     const val TAG_IN_PREFIX = "in-"
     const val TAG_OUT_PREFIX = "out-"
     const val SMART_POOL_REMARKS = "⚡ Smart Pool"
@@ -23,4 +24,13 @@ object SmartPoolConstants {
     const val MIN_PORT_LIMIT = 16
     const val NODE_DEADLINE_MS = 86_400_000L
     const val MAX_CONSECUTIVE_FAILS = 24
+    const val RACE_PROBE_COUNT = 18
+    const val INTERNAL_POOL_USER = "ang_internal_pool"
+    const val BASE_CUTOFF_MS = 150L
+    const val MAX_CUTOFF_MS = 5000L
+    const val BURST_MULTIPLIER = 4
+    const val WARM_MULTIPLIER = 2
+    const val MAX_CONCURRENT_SOCKETS = 64
+    const val WARM_POOL_CAPACITY = 23
+
 }

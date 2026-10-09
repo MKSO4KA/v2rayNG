@@ -48,6 +48,9 @@ fun GistSettingsGroup(
     var poolUrl by rememberMmkvString(AppConfig.PREF_GIST_POOL_URL, "")
     var blacklistUrl by rememberMmkvString(AppConfig.PREF_GIST_BLACKLIST_URL, "")
     var autoSync by rememberMmkvBool(AppConfig.PREF_GIST_AUTO_SYNC_ENABLED, true)
+    var githubToken by rememberMmkvString(AppConfig.PREF_GITHUB_REPORT_TOKEN, "")
+    var githubRepo by rememberMmkvString(AppConfig.PREF_GITHUB_REPORT_REPO, AppConfig.DEFAULT_GITHUB_REPORT_REPO)
+
 
     SettingsEditItem(
         title = stringResource(R.string.title_pref_gist_rules_url),
@@ -70,6 +73,17 @@ fun GistSettingsGroup(
         checked = autoSync,
         onCheckedChange = { autoSync = it }
     )
+    SettingsEditItem(
+        title = "GitHub Reporting Token (PAT)",
+        value = githubToken,
+        onValueChanged = { githubToken = it }
+    )
+    SettingsEditItem(
+        title = "Crash Report Repository",
+        value = githubRepo,
+        onValueChanged = { githubRepo = it }
+    )
+
 
     Button(
         onClick = {

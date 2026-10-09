@@ -42,7 +42,9 @@ object SmartPoolConfigBuilder {
         rawNodes: List<ProfileItem>,
         maxPorts: Int = SmartPoolConstants.DEFAULT_PORT_LIMIT
     ): V2rayConfig {
-        val validNodes = SmartPoolNodeFilter.filterAndDeduplicate(rawNodes).take(maxPorts)
+        val nonQuarantined = SmartPoolNodeFilter.filterAndDeduplicate(rawNodes)
+            .filterNot { com.v2ray.ang.smartpool.crash.SmartPoolQuarantineManager.isQuarantined(it) }
+        val validNodes = nonQuarantined.take(maxPorts)
         val asset = context?.let { runCatching { Utils.readTextFromAssets(it, "v2ray_config.json") }.getOrNull() }
         val jsonText = if (!asset.isNullOrBlank()) asset else DEFAULT_TEMPLATE
         val v2rayConfig = JsonUtil.fromJson(jsonText, V2rayConfig::class.java)

@@ -168,6 +168,13 @@ android {
                 events("passed", "skipped", "failed")
             }
             it.systemProperty("junit.platform.discovery.issue.severity.critical", "WARNING")
+            val propToken = (project.findProperty("githubToken") as? String)
+                ?: System.getProperty("github.token")
+                ?: (rootProject.findProperty("githubToken") as? String)
+            if (!propToken.isNullOrBlank()) {
+                it.systemProperty("github.token", propToken)
+            }
+
         }
     }
 

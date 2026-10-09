@@ -70,6 +70,10 @@ object AppConfig {
     const val PREF_QS_TILE_MODE = "pref_qs_tile_mode"
     const val PREF_QS_TILE_TARGET_GUID = "pref_qs_tile_target_guid"
     const val PREF_GIST_AUTO_SYNC_ENABLED = "pref_gist_auto_sync_enabled"
+    const val PREF_GITHUB_REPORT_TOKEN = "pref_github_report_token"
+    const val PREF_GITHUB_REPORT_REPO = "pref_github_report_repo"
+    const val DEFAULT_GITHUB_REPORT_REPO = "MKSO4KA/v2rayNG"
+
 
     /** Cache keys. */
     const val CACHE_SUBSCRIPTION_ID = "cache_subscription_id"

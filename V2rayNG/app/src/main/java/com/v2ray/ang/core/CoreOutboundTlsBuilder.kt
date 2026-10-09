@@ -14,7 +14,12 @@ import com.v2ray.ang.util.Utils
 object CoreOutboundTlsBuilder {
     fun populateTlsSettings(streamSettings: StreamSettingsBean, profileItem: ProfileItem, sniExt: String?) {
         val streamSecurity = profileItem.security.orEmpty()
-        val allowInsecure = profileItem.insecure == true && profileItem.pinnedCA256.isNullOrEmpty()
+        if (profileItem.insecure == true && profileItem.pinnedCA256.isNullOrEmpty()) {
+            com.v2ray.ang.smartpool.crash.SmartPoolLogRingBuffer.log(
+                "[HotFix] Node '${profileItem.remarks}': disabled deprecated allowInsecure to prevent Xray rejection; standard CA verification enabled"
+            )
+        }
+        val allowInsecure = false
         val sni = if (profileItem.sni.isNullOrEmpty()) {
             when {
                 sniExt.isNotNullEmpty() && Utils.isDomainName(sniExt) -> sniExt

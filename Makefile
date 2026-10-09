@@ -176,7 +176,7 @@ tunnel:
 		find "$(TUNNEL_DIR)" -type f -name "*.symbak" | while read -r bak_file; do \
 			orig_file="$${bak_file%.symbak}"; \
 			mv -f "$$bak_file" "$$orig_file"; \
-		done; \
+			done; \
 		if [ $$BUILD_EXIT -ne 0 ]; then \
 			echo "  -> [FATAL] Tunnel build failed even with hotfix."; \
 			exit $$BUILD_EXIT; \
@@ -187,7 +187,7 @@ tunnel:
 
 core: assets
 	@echo "[3/4] Compiling Go Core (Xray Lite) -> AAR (In-flight Isolated Build)..."
-	@(\
+	@(
 		TEMP_STASH_DIR=$$(mktemp -d 2>/dev/null || mktemp -d -t 'xray_patch'); \
 		cleanup_and_restore() { \
 			echo "=== [FINALLY] Restoring original submodule state ==="; \
@@ -222,8 +222,6 @@ core: assets
 	)
 
 
-
-
 deploy:
 	@echo "[4/4] Deploying artifacts to V2rayNG project..."
 	@if [ -z "$(APP_LIBS_DIR)" ]; then echo "ERROR: APP_LIBS_DIR is empty!"; exit 1; fi
@@ -240,9 +238,19 @@ TEST_FLAVOR ?= Fdroid
 
 test:
 	@echo "=== Running Android Unit Tests ($(TEST_FLAVOR)) ==="
-	@cd "$(PROJECT_ROOT)/V2rayNG" && chmod +x gradlew && ./gradlew test$(TEST_FLAVOR)DebugUnitTest
+	@cd "$(PROJECT_ROOT)/V2rayNG" && chmod +x gradlew && ./gradlew :app:test$(TEST_FLAVOR)DebugUnitTest $(if $(TOKEN),--rerun-tasks -PgithubToken="$(TOKEN)" -Dgithub.token="$(TOKEN)",)
 
-.PHONY: log
+.PHONY: test_crash
+
+test_crash:
+	@echo "=== Running Crash Report Tests ($(TEST_FLAVOR)) ==="
+	@cd "$(PROJECT_ROOT)/V2rayNG" && chmod +x gradlew && ./gradlew :app:test$(TEST_FLAVOR)DebugUnitTest --rerun-tasks --tests "com.v2ray.ang.smartpool.crash.CrashReportUploadIntegrationTest" $(if $(TOKEN),-PgithubToken="$(TOKEN)" -Dgithub.token="$(TOKEN)",)
+
+.PHONY: test_live
+test_live:
+	@echo "=== Running Live End-to-End Orchestration & Chaos Test ($(TEST_FLAVOR)) ==="
+	@cd "$(PROJECT_ROOT)/V2rayNG" && chmod +x gradlew && RUN_LIVE_TESTS=true ./gradlew :app:test$(TEST_FLAVOR)DebugUnitTest --rerun-tasks --tests "com.v2ray.ang.smartpool.SmartSubscriptionLiveDiagnosticsTest.testLiveEndToEndOrchestrationWithChaosInjection" $(if $(TOKEN),-PgithubToken="$(TOKEN)" -Dgithub.token="$(TOKEN)",) $(if $(SUB_URL),-PsubUrl="$(SUB_URL)" -Dsub.url="$(SUB_URL)",)
+
 log:
 	@echo "=== Streaming Fresh SmartPool / v2rayNG Logs via ADB ==="
 	@ADB_BIN="$(ANDROID_HOME)/platform-tools/adb.exe"; \
@@ -338,10 +346,8 @@ diff:
 	@echo "Calculating merge-base..."
 	@BASE=$$(git merge-base $(UPSTREAM)/$(BRANCH) HEAD); \
 	echo "Base commit: $$BASE"; \
-	echo "Generating diff (Parent)..." >&2; \
-	git diff $$BASE HEAD -- $(EXT_FILTER) > my_v2rayng_changes.diff; \
-	\
-	echo "Generating diff (Submodules)..." >&2; \
+	echo "Generating diff (Parent)..." >2; \
+	git diff $$BASE HEAD -- $(EXT_FILTER) > my_v2rayng_changes.diff; \\n	echo "Generating diff (Submodules)..." >2; \
 	git submodule foreach --recursive " \
 		# Получаем хеш коммита подмодуля, который был в базовой версии проекта \
 		SM_BASE=\$$(git -C $(CURDIR) rev-parse \$$BASE:\$$displaypath 2>/dev/null); \
@@ -350,8 +356,8 @@ diff:
 			SM_BASE=\$$(git hash-object -t tree /dev/null); \
 			echo \"Submodule \$$displaypath is new.\"; \
 		fi; \
-		echo \"\n--- Submodule: \$$displaypath ---\" >> $(CURDIR)/my_v2rayng_changes.diff; \
-		git diff \$$SM_BASE HEAD -- $(EXT_FILTER) >> $(CURDIR)/my_v2rayng_changes.diff \
+		echo \"\n--- Submodule: \$$displaypath ---\" >>$(CURDIR)/my_v2rayng_changes.diff; \
+		git diff \$$SM_BASE HEAD -- $(EXT_FILTER) >>$(CURDIR)/my_v2rayng_changes.diff \
 	"
 	@echo "DONE! File created: my_v2rayng_changes.diff"
 # --- ADB INSTALLATION TASK ---
@@ -417,8 +423,6 @@ install:
 			echo "[ERROR] Installation failed. Check device screen for confirmation dialogs."; \
 		fi; \
 	fi
-
-
 
 .PHONY: install-wifi install-v8a
 
